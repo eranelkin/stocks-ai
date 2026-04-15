@@ -8,8 +8,10 @@
     "dev": "nodemon src/index.js"
   },
   "dependencies": {
+    "better-sqlite3": "^12.9.0",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
