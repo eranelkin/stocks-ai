@@ -11,6 +11,7 @@ import ModelSelector from './components/ModelSelector';
 import ServerStatus from './components/ServerStatus';
 import PromptsPage from './pages/PromptsPage';
 import ReportsPage from './pages/ReportsPage';
+import MarketPage from './pages/MarketPage';
 
 function DarkModeToggle() {
   const { mode, setMode } = useColorScheme();
@@ -89,6 +90,7 @@ function App() {
               <NavTab to="/chat">Chat</NavTab>
               <NavTab to="/prompts">Prompts</NavTab>
               <NavTab to="/reports">Reports</NavTab>
+              <NavTab to="/market">Market</NavTab>
             </Box>
           </Box>
 
@@ -118,6 +120,7 @@ function App() {
           />
           <Route path="/prompts" element={<PromptsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/market" element={<MarketPage />} />
         </Routes>
       </Box>
     </CssVarsProvider>

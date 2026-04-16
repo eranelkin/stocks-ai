@@ -20,7 +20,7 @@ app = FastAPI(title="stocks-ai-service", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:5005"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
