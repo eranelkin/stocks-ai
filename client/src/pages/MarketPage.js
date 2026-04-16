@@ -1,10 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Box from "@mui/joy/Box";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Chip from "@mui/joy/Chip";
 import Sheet from "@mui/joy/Sheet";
+import Tab from "@mui/joy/Tab";
+import TabList from "@mui/joy/TabList";
+import Tabs from "@mui/joy/Tabs";
 import Tooltip from "@mui/joy/Tooltip";
 import Typography from "@mui/joy/Typography";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 // ── Zone helper ───────────────────────────────────────────────────────────────
 
@@ -440,6 +453,198 @@ function ComponentRow({ name, val, desc, raw }) {
   );
 }
 
+// ── Historical chart ─────────────────────────────────────────────────────────
+
+const RANGES = [
+  { label: "2W", days: 14 },
+  { label: "1M", days: 30 },
+  { label: "3M", days: 90 },
+  { label: "1Y", days: 365 },
+];
+const CHART_GRADIENT_ID = "fgHistoryGradient";
+
+function HistoryTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const zone = getZone(d.score);
+  return (
+    <Sheet
+      variant="outlined"
+      sx={{ p: 1.5, borderRadius: "sm", minWidth: 130 }}
+    >
+      <Typography level="body-xs" textColor="neutral.400">
+        {d.date}
+      </Typography>
+      <Typography level="body-sm" sx={{ color: zone.color, fontWeight: 700 }}>
+        {d.score} — {zone.label}
+      </Typography>
+    </Sheet>
+  );
+}
+
+function FearGreedHistory() {
+  const [range, setRange] = useState(14);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchHistory = useCallback((days) => {
+    setLoading(true);
+    setError(null);
+    fetch(`/api/feargreed/history?days=${days}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) throw new Error(d.error);
+        setHistory(d);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchHistory(range);
+  }, [range, fetchHistory]);
+
+  return (
+    <Sheet variant="outlined" sx={{ borderRadius: "lg", p: 3, mt: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 2,
+        }}
+      >
+        <Typography
+          level="body-xs"
+          textColor="neutral.500"
+          sx={{ letterSpacing: "0.1em", fontWeight: 700 }}
+        >
+          HISTORICAL TREND
+        </Typography>
+        <Tabs
+          value={range}
+          onChange={(_, val) => setRange(val)}
+          size="sm"
+          sx={{ bgcolor: "transparent" }}
+        >
+          <TabList
+            disableUnderline
+            sx={{
+              p: 0.5,
+              gap: 0.5,
+              borderRadius: "md",
+              bgcolor: "neutral.softBg",
+              "& .MuiTab-root": {
+                minWidth: 36,
+                fontWeight: 600,
+                fontSize: "0.72rem",
+                color: "neutral.400",
+              },
+              "& .Mui-selected": {
+                bgcolor: "neutral.700",
+                color: "neutral.100",
+              },
+            }}
+          >
+            {RANGES.map(({ label, days }) => (
+              <Tab key={days} value={days} disableIndicator>
+                {label}
+              </Tab>
+            ))}
+          </TabList>
+        </Tabs>
+      </Box>
+
+      {loading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress size="sm" />
+        </Box>
+      ) : error ? (
+        <Typography
+          color="danger"
+          level="body-sm"
+          sx={{ textAlign: "center", py: 4 }}
+        >
+          {error}
+        </Typography>
+      ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart
+            data={history}
+            margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+          >
+            <defs>
+              <linearGradient
+                id={CHART_GRADIENT_ID}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop offset="0%" stopColor="#43a047" stopOpacity={0.8} />
+                <stop offset="25%" stopColor="#66bb6a" stopOpacity={0.7} />
+                <stop offset="45%" stopColor="#fdd835" stopOpacity={0.6} />
+                <stop offset="55%" stopColor="#ff9800" stopOpacity={0.6} />
+                <stop offset="100%" stopColor="#ef5350" stopOpacity={0.8} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.07)"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: "#666", fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+              tickFormatter={(d) => {
+                const dt = new Date(d + "T00:00:00");
+                return dt.toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                });
+              }}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fill: "#666", fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              ticks={[0, 25, 45, 55, 75, 100]}
+            />
+            {[25, 45, 55, 75].map((v) => (
+              <ReferenceLine
+                key={v}
+                y={v}
+                stroke="rgba(255,255,255,0.12)"
+                strokeDasharray="4 4"
+              />
+            ))}
+            <RechartsTooltip
+              content={<HistoryTooltip />}
+              cursor={{ stroke: "rgba(255,255,255,0.15)", strokeWidth: 1 }}
+            />
+            <Area
+              type="monotone"
+              dataKey="score"
+              stroke={`url(#${CHART_GRADIENT_ID})`}
+              strokeWidth={2}
+              fill={`url(#${CHART_GRADIENT_ID})`}
+              fillOpacity={1}
+              dot={false}
+              activeDot={{ r: 4, fill: "#fff" }}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </Sheet>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 function MarketPage() {
@@ -557,6 +762,9 @@ function MarketPage() {
             />
           ))}
         </Sheet>
+
+        {/* Historical trend chart */}
+        <FearGreedHistory />
       </Box>
     </Box>
   );
