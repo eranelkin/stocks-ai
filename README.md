@@ -1,18 +1,18 @@
 # Stocks AI
 
-An AI-powered stock analysis platform. Ask questions about stocks, attach JSON/CSV data files, and get structured analysis with probability assessments from LLMs.
+An AI-powered stock analysis platform. Save prompts, run them against LLMs, capture structured output as reports, and monitor market sentiment with the Fear & Greed Index.
 
 ## Services
 
 | Service | Stack | Port | Purpose |
 |---|---|---|---|
-| `client/` | React 19 + MUI Joy | 3000 | Trading UI and chat interface |
-| `server/` | Node.js + Express | 3001 | REST API gateway |
-| `ai-service/` | Python + FastAPI | 5005 | LLM streaming, model registry |
+| `client/` | React 19 + MUI Joy | **5005** | Trading UI — Chat, Prompts, Reports, Market |
+| `server/` | Node.js + Express | **5006** | REST API gateway + SQLite DB |
+| `ai-service/` | Python + FastAPI | **5007** | LLM streaming, model registry |
 
 **Request flow:**
 ```
-Browser → client (3000) → server (3001) → /api/ai/* → ai-service (5005)
+Browser → client (5005) → server (5006) → /api/ai/* → ai-service (5007)
                                          → /api/*    → server own routes
 ```
 
@@ -68,6 +68,8 @@ cd client
 npm install
 ```
 
+> The client repo includes a `client/.env` file that sets `PORT=5005`. No extra step needed.
+
 ---
 
 ## Running in development
@@ -77,7 +79,7 @@ Open **three terminals**, one per service.
 **Terminal 1 — AI service**
 ```bash
 cd ai-service
-.venv/bin/uvicorn src.main:app --reload --port 5005
+.venv/bin/uvicorn src.main:app --reload --port 5007
 ```
 
 **Terminal 2 — Server**
@@ -92,7 +94,23 @@ cd client
 npm start
 ```
 
-The app opens at **http://localhost:3000**.
+The app opens at **http://localhost:5005**.
+
+---
+
+## Features
+
+### Prompts
+Save and manage reusable prompt templates. Hit the play button to send a prompt directly to chat.
+
+### Chat
+Chat with any configured LLM. Attach JSON or CSV files for analysis. When the AI response contains a `| Symbol | Current Price` table, a **Save Report** button appears on the message.
+
+### Reports
+All saved reports are listed here. Click a row to view the full parsed table. Delete reports you no longer need.
+
+### Market
+Live Fear & Greed Index gauge (CNN-style SVG dial) with a component breakdown table. Data is fetched from `feargreedchart.com` and cached server-side for 15 minutes.
 
 ---
 
@@ -118,14 +136,23 @@ The UI dropdown picks it up automatically — no other code changes needed.
 
 ## API reference
 
-### Server — `http://localhost:3001`
+### Server — `http://localhost:5006`
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/health` | Server health check |
+| GET | `/api/prompts` | List all prompts |
+| POST | `/api/prompts` | Create a prompt |
+| PUT | `/api/prompts/:id` | Update a prompt |
+| DELETE | `/api/prompts/:id` | Delete a prompt |
+| GET | `/api/reports` | List all reports |
+| GET | `/api/reports/:id` | Get a single report |
+| POST | `/api/reports` | Save a report `{ title, columns, rows, source_prompt_title? }` |
+| DELETE | `/api/reports/:id` | Delete a report |
+| GET | `/api/feargreed` | Fear & Greed Index (15 min cache) |
 | * | `/api/ai/*` | Proxied to ai-service |
 
-### AI service — `http://localhost:5005`
+### AI service — `http://localhost:5007`
 
 | Method | Path | Body | Description |
 |---|---|---|---|
@@ -155,33 +182,56 @@ data: [DONE]
 
 ---
 
+## Database
+
+The server uses **SQLite** (via `better-sqlite3`) stored at `data/stocks-ai.db` (auto-created on first run, excluded from git).
+
+Tables:
+- `prompts` — saved prompt templates
+- `reports` — saved AI-generated output tables (columns/rows stored as JSON)
+
+---
+
 ## Project structure
 
 ```
 stocks-AI/
 ├── client/                 # React 19 frontend
+│   ├── .env                # PORT=5005
 │   └── src/
 │       ├── App.js
-│       └── components/
-│           ├── ChatWindow.js
-│           ├── ModelSelector.js
-│           └── ServerStatus.js
+│       ├── components/
+│       │   ├── ChatWindow.js
+│       │   ├── ModelSelector.js
+│       │   └── ServerStatus.js
+│       ├── pages/
+│       │   ├── PromptsPage.js
+│       │   ├── ReportsPage.js
+│       │   └── MarketPage.js
+│       └── utils/
+│           └── parseMarkdownTable.js
 ├── server/                 # Express API gateway
 │   └── src/
 │       ├── index.js
+│       ├── db/
+│       │   └── index.js    ← SQLite schema init
 │       └── routes/
-│           └── health.js
-└── ai-service/             # FastAPI LLM service
-    ├── .env.example
-    ├── requirements.txt
-    └── src/
-        ├── main.py
-        ├── config/
-        │   └── models.py   ← add new models here
-        ├── routes/
-        │   ├── chat.py
-        │   ├── health.py
-        │   └── models.py
-        └── services/
-            └── llm.py
+│           ├── health.js
+│           ├── prompts.js
+│           ├── reports.js
+│           └── feargreed.js
+├── ai-service/             # FastAPI LLM service
+│   ├── .env.example
+│   ├── requirements.txt
+│   └── src/
+│       ├── main.py
+│       ├── config/
+│       │   └── models.py   ← add new models here
+│       ├── routes/
+│       │   ├── chat.py
+│       │   ├── health.py
+│       │   └── models.py
+│       └── services/
+│           └── llm.py
+└── data/                   # SQLite DB lives here (git-ignored)
 ```
