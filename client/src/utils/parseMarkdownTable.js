@@ -1,13 +1,27 @@
+const START_MARKER = "<DAY_TRADE_TABLE_START>";
+const END_MARKER = "<DAY_TRADE_TABLE_END>";
+
 /**
- * Parses the markdown table whose header contains "| Symbol | Current Price".
+ * Parses the markdown table enclosed in <DAY_TRADE_TABLE_START> / <DAY_TRADE_TABLE_END> markers.
  * Returns { columns: string[], rows: string[][] } or null if not found / invalid.
  */
 export function parseMarkdownTable(content) {
-  const lines = content.split('\n').map((l) => l.trim());
+  const startIdx = content.indexOf(START_MARKER);
+  const endIdx = content.indexOf(END_MARKER);
 
-  // Find the header row by the known column pattern (case-insensitive)
-  const headerIdx = lines.findIndex((l) =>
-    l.toLowerCase().includes('| symbol |') && l.toLowerCase().includes('| current price')
+  let tableContent;
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    tableContent = content.slice(startIdx + START_MARKER.length, endIdx).trim();
+  } else {
+    // Fallback: use entire content (handles responses without markers)
+    tableContent = content;
+  }
+
+  const lines = tableContent.split("\n").map((l) => l.trim());
+
+  // Find the first pipe-delimited header row (not a separator)
+  const headerIdx = lines.findIndex(
+    (l) => l.startsWith("|") && !/^\|[\s\-|:]+\|?$/.test(l),
   );
   if (headerIdx === -1) return null;
 
@@ -19,7 +33,7 @@ export function parseMarkdownTable(content) {
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i];
-    if (!line.startsWith('|')) break; // end of table
+    if (!line.startsWith("|")) break; // end of table
 
     // Skip separator line (e.g. |---|---|)
     if (/^\|[\s\-|:]+\|?$/.test(line)) continue;
@@ -28,7 +42,7 @@ export function parseMarkdownTable(content) {
     if (cells.length === 0) continue;
 
     // Pad or truncate to match column count
-    while (cells.length < colCount) cells.push('');
+    while (cells.length < colCount) cells.push("");
     rows.push(cells.slice(0, colCount));
   }
 
@@ -37,11 +51,21 @@ export function parseMarkdownTable(content) {
   return { columns, rows };
 }
 
+/**
+ * Removes <DAY_TRADE_TABLE_START> / <DAY_TRADE_TABLE_END> markers from a message for clean display.
+ * The markdown table content between them is preserved.
+ */
+export function stripTableMarkers(content) {
+  return content
+    .replace(new RegExp(`${START_MARKER}\\s*`, "g"), "")
+    .replace(new RegExp(`${END_MARKER}\\s*`, "g"), "");
+}
+
 function parseCells(line) {
   return line
-    .split('|')
+    .split("|")
     .map((c) => c.trim())
-    .filter((c, i, arr) => i !== 0 && i !== arr.length - 1 ? true : c !== '');
+    .filter((c, i, arr) => (i !== 0 && i !== arr.length - 1 ? true : c !== ""));
 }
 
 /**
@@ -49,7 +73,10 @@ function parseCells(line) {
  * e.g. "Symbol / Price — Apr 15"
  */
 export function deriveTitle(columns) {
-  const date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const label = columns.slice(0, 2).join(' / ');
+  const date = new Date().toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const label = columns.slice(0, 2).join(" / ");
   return `${label} — ${date}`;
 }

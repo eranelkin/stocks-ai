@@ -1,25 +1,174 @@
 import { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/joy/Box';
+import Button from '@mui/joy/Button';
 import Chip from '@mui/joy/Chip';
 import CircularProgress from '@mui/joy/CircularProgress';
 import IconButton from '@mui/joy/IconButton';
+import Input from '@mui/joy/Input';
 import Sheet from '@mui/joy/Sheet';
+import Tab from '@mui/joy/Tab';
+import TabList from '@mui/joy/TabList';
+import Tabs from '@mui/joy/Tabs';
 import Table from '@mui/joy/Table';
 import Tooltip from '@mui/joy/Tooltip';
 import Typography from '@mui/joy/Typography';
 
-function formatDate(iso) {
-  return new Date(iso).toLocaleString(undefined, {
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function toLocalDateStr(sqlOrIso) {
+  // SQLite stores "2026-04-17 14:30:00" without timezone — treat as UTC
+  const normalized = sqlOrIso.includes('T') ? sqlOrIso : sqlOrIso.replace(' ', 'T') + 'Z';
+  return new Date(normalized).toLocaleDateString('en-CA'); // YYYY-MM-DD local
+}
+
+function todayStr() {
+  return new Date().toLocaleDateString('en-CA');
+}
+
+function yesterdayStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toLocaleDateString('en-CA');
+}
+
+function formatDate(sqlOrIso) {
+  const normalized = sqlOrIso.includes('T') ? sqlOrIso : sqlOrIso.replace(' ', 'T') + 'Z';
+  return new Date(normalized).toLocaleString(undefined, {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
 }
 
+// ─── Shared sub-components ────────────────────────────────────────────────────
+
+function ReportsList({ reports, selectedId, deleting, onSelect, onDelete, emptyText }) {
+  if (reports.length === 0) {
+    return (
+      <Sheet variant="outlined" sx={{ borderRadius: 'md', p: 4, textAlign: 'center', flexShrink: 0 }}>
+        <Typography level="body-md" textColor="neutral.500">{emptyText}</Typography>
+      </Sheet>
+    );
+  }
+
+  return (
+    // ~44px header + 44px × 5 rows = ~264px cap
+    <Sheet variant="outlined" sx={{ borderRadius: 'md', overflow: 'auto', flexShrink: 0, maxHeight: 264 }}>
+      <Table
+        hoverRow
+        stickyHeader
+        sx={{
+          '& th': { bgcolor: 'background.surface' },
+          '& tbody tr': { cursor: 'pointer' },
+          '& tbody tr.report-row-selected td': { bgcolor: 'primary.softBg' },
+        }}
+      >
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th style={{ width: 180 }}>Source</th>
+            <th style={{ width: 80 }}>Rows</th>
+            <th style={{ width: 160 }}>Created</th>
+            <th style={{ width: 64 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {reports.map((r) => (
+            <tr
+              key={r.id}
+              onClick={() => onSelect(r.id === selectedId ? null : r.id)}
+              className={r.id === selectedId ? 'report-row-selected' : ''}
+            >
+              <td>
+                <Typography level="body-sm" fontWeight="lg">{r.title}</Typography>
+              </td>
+              <td>
+                {r.source_prompt_title ? (
+                  <Typography level="body-sm" textColor="neutral.600">{r.source_prompt_title}</Typography>
+                ) : (
+                  <Typography level="body-xs" textColor="neutral.400">—</Typography>
+                )}
+              </td>
+              <td>
+                <Chip size="sm" variant="soft" color="neutral">{r.rows.length}</Chip>
+              </td>
+              <td>
+                <Typography level="body-xs" textColor="neutral.500">{formatDate(r.created_at)}</Typography>
+              </td>
+              <td onClick={(e) => e.stopPropagation()}>
+                <Tooltip title="Delete" placement="top">
+                  <IconButton
+                    size="sm"
+                    variant="plain"
+                    color="danger"
+                    loading={deleting.has(r.id)}
+                    onClick={() => onDelete(r.id)}
+                  >
+                    <TrashIcon />
+                  </IconButton>
+                </Tooltip>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Sheet>
+  );
+}
+
+function DetailPanel({ report, onClose }) {
+  if (!report) return null;
+
+  return (
+    <Sheet
+      variant="outlined"
+      sx={{ borderRadius: 'md', overflow: 'hidden', flex: 1, mt: 2, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+    >
+      <Box
+        sx={{
+          px: 2, py: 1,
+          borderBottom: '1px solid', borderColor: 'divider',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0, bgcolor: 'background.surface',
+        }}
+      >
+        <Typography level="title-sm">{report.title}</Typography>
+        <IconButton size="sm" variant="plain" color="neutral" onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      <Box sx={{ overflow: 'auto', flex: 1 }}>
+        <Table hoverRow stickyHeader sx={{ '& th': { bgcolor: 'background.surface' } }}>
+          <thead>
+            <tr>
+              {report.columns.map((col, i) => <th key={i}>{col}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {report.rows.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td key={ci}><Typography level="body-sm">{cell}</Typography></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Box>
+    </Sheet>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 function ReportsPage() {
-  const [reports, setReports]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [selectedId, setSelectedId] = useState(null);
-  const [deleting, setDeleting]   = useState(new Set());
+  const [reports, setReports]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [selectedId, setSelectedId]   = useState(null);
+  const [deleting, setDeleting]       = useState(new Set());
+  const [activeTab, setActiveTab]     = useState('today');
+  const [dateFrom, setDateFrom]       = useState('');
+  const [dateTo, setDateTo]           = useState('');
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -28,7 +177,7 @@ function ReportsPage() {
       const data = await res.json();
       setReports(data);
     } catch {
-      // ignore — table stays empty
+      // ignore
     } finally {
       setLoading(false);
     }
@@ -48,150 +197,124 @@ function ReportsPage() {
     }
   }
 
+  function handleTabChange(_, val) {
+    setActiveTab(val);
+    setSelectedId(null);
+    setDateFrom('');
+    setDateTo('');
+  }
+
+  function clearFilter() {
+    setDateFrom('');
+    setDateTo('');
+    setSelectedId(null);
+  }
+
+  const today = todayStr();
+  const todayReports   = reports.filter((r) => toLocalDateStr(r.created_at) === today);
+  const historyReports = reports.filter((r) => toLocalDateStr(r.created_at) < today);
+  const hasFilter = dateFrom || dateTo;
+  const filteredHistory = hasFilter
+    ? historyReports.filter((r) => {
+        const d = toLocalDateStr(r.created_at);
+        if (dateFrom && d < dateFrom) return false;
+        if (dateTo   && d > dateTo)   return false;
+        return true;
+      })
+    : historyReports;
+
   const selectedReport = reports.find((r) => r.id === selectedId) ?? null;
 
   return (
-    <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 3 }}>
       {/* Page header */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2, flexShrink: 0 }}>
         <Typography level="h3">Reports</Typography>
         <Typography level="body-sm" textColor="neutral.500">
           Saved output tables from your AI analyses.
         </Typography>
       </Box>
 
-      {/* Reports list */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
-      ) : reports.length === 0 ? (
-        <Sheet variant="outlined" sx={{ borderRadius: 'md', p: 6, textAlign: 'center' }}>
-          <Typography level="body-md" textColor="neutral.500">
-            No reports yet. Save a report from a chat response to see it here.
-          </Typography>
-        </Sheet>
       ) : (
-        <Sheet variant="outlined" sx={{ borderRadius: 'md', overflow: 'auto' }}>
-          <Table
-            hoverRow
-            stickyHeader
-            sx={{
-              '& th': { bgcolor: 'background.surface' },
-              '& tbody tr': { cursor: 'pointer' },
-              '& tbody tr.report-row-selected td': { bgcolor: 'primary.softBg' },
-            }}
+        // Tabs owns only the tab-strip; content lives in a sibling Box so flex
+        // sizing is never blocked by TabPanel's internal display:none toggling.
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            sx={{ flexShrink: 0, bgcolor: 'transparent' }}
           >
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th style={{ width: 180 }}>Source</th>
-                <th style={{ width: 80 }}>Rows</th>
-                <th style={{ width: 160 }}>Created</th>
-                <th style={{ width: 80 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reports.map((r) => (
-                <tr
-                  key={r.id}
-                  onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
-                  className={r.id === selectedId ? 'report-row-selected' : ''}
-                >
-                  <td>
-                    <Typography level="body-sm" fontWeight="lg">
-                      {r.title}
-                    </Typography>
-                  </td>
-                  <td>
-                    {r.source_prompt_title ? (
-                      <Typography level="body-sm" textColor="neutral.600">
-                        {r.source_prompt_title}
-                      </Typography>
-                    ) : (
-                      <Typography level="body-xs" textColor="neutral.400">—</Typography>
-                    )}
-                  </td>
-                  <td>
-                    <Chip size="sm" variant="soft" color="neutral">
-                      {r.rows.length}
-                    </Chip>
-                  </td>
-                  <td>
+            <TabList>
+              <Tab value="today">Today</Tab>
+              <Tab value="history">History</Tab>
+            </TabList>
+          </Tabs>
+
+          {/* ── Today content ── */}
+          {activeTab === 'today' && (
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, pt: 1.5 }}>
+              <ReportsList
+                reports={todayReports}
+                selectedId={selectedId}
+                deleting={deleting}
+                onSelect={setSelectedId}
+                onDelete={handleDelete}
+                emptyText="No reports generated today."
+              />
+              <DetailPanel report={selectedReport} onClose={() => setSelectedId(null)} />
+            </Box>
+          )}
+
+          {/* ── History content ── */}
+          {activeTab === 'history' && (
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, pt: 1.5 }}>
+              {/* Date range filter — pinned just below the tab strip */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexShrink: 0 }}>
+                <Input
+                  type="date"
+                  size="sm"
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setSelectedId(null); }}
+                  slotProps={{ input: { max: dateTo || yesterdayStr() } }}
+                  sx={{ width: 160 }}
+                />
+                <Typography level="body-xs" textColor="neutral.400">—</Typography>
+                <Input
+                  type="date"
+                  size="sm"
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setSelectedId(null); }}
+                  slotProps={{ input: { min: dateFrom || undefined, max: yesterdayStr() } }}
+                  sx={{ width: 160 }}
+                />
+                {hasFilter && (
+                  <>
+                    <Button size="sm" variant="plain" color="neutral" onClick={clearFilter}>
+                      Clear
+                    </Button>
                     <Typography level="body-xs" textColor="neutral.500">
-                      {formatDate(r.created_at)}
+                      {filteredHistory.length} report{filteredHistory.length !== 1 ? 's' : ''}
                     </Typography>
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <Tooltip title="Delete" placement="top">
-                      <IconButton
-                        size="sm"
-                        variant="plain"
-                        color="danger"
-                        loading={deleting.has(r.id)}
-                        onClick={() => handleDelete(r.id)}
-                      >
-                        <TrashIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Sheet>
-      )}
+                  </>
+                )}
+              </Box>
 
-      {/* Detail panel */}
-      {selectedReport && (
-        <Sheet
-          variant="outlined"
-          sx={{ borderRadius: 'md', overflow: 'auto', height: 320, mt: 2, display: 'flex', flexDirection: 'column' }}
-        >
-          {/* Panel header */}
-          <Box
-            sx={{
-              px: 2,
-              py: 1,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexShrink: 0,
-              bgcolor: 'background.surface',
-            }}
-          >
-            <Typography level="title-sm">{selectedReport.title}</Typography>
-            <IconButton size="sm" variant="plain" color="neutral" onClick={() => setSelectedId(null)}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-
-          {/* Data table */}
-          <Box sx={{ overflow: 'auto', flex: 1 }}>
-            <Table hoverRow stickyHeader sx={{ '& th': { bgcolor: 'background.surface' } }}>
-              <thead>
-                <tr>
-                  {selectedReport.columns.map((col, i) => (
-                    <th key={i}>{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {selectedReport.rows.map((row, ri) => (
-                  <tr key={ri}>
-                    {row.map((cell, ci) => (
-                      <td key={ci}>
-                        <Typography level="body-sm">{cell}</Typography>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </Box>
-        </Sheet>
+              <ReportsList
+                reports={filteredHistory}
+                selectedId={selectedId}
+                deleting={deleting}
+                onSelect={setSelectedId}
+                onDelete={handleDelete}
+                emptyText={hasFilter ? 'No reports for this date range.' : 'No historical reports yet.'}
+              />
+              <DetailPanel report={selectedReport} onClose={() => setSelectedId(null)} />
+            </Box>
+          )}
+        </Box>
       )}
     </Box>
   );
