@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from config.models import get_model
 from services.llm import stream_chat
 
 router = APIRouter()
@@ -28,13 +27,8 @@ class ChatRequest(BaseModel):
 
 @router.post("")
 async def chat(req: ChatRequest):
-    try:
-        model_config = get_model(req.model)
-    except KeyError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
     kwargs = {
-        "model_config": model_config,
+        "model_id": req.model,
         "messages": [m.model_dump() for m in req.messages],
         "attachments": [a.model_dump() for a in req.attachments],
     }
@@ -43,6 +37,8 @@ async def chat(req: ChatRequest):
 
     try:
         generator = stream_chat(**kwargs)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except EnvironmentError as e:
         raise HTTPException(status_code=503, detail=str(e))
 

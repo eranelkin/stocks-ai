@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Ensure the src/ directory is on sys.path so intra-service imports work
@@ -12,11 +13,19 @@ load_dotenv()  # must run before any route imports that read env vars
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from db.models_db import init_db
 from routes.chat import router as chat_router
 from routes.health import router as health_router
 from routes.models import router as models_router
 
-app = FastAPI(title="stocks-ai-service", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()  # idempotent — seeds from models.py on first run
+    yield
+
+
+app = FastAPI(title="stocks-ai-service", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -9,9 +9,10 @@ import Typography from '@mui/joy/Typography';
 import ChatWindow from './components/ChatWindow';
 import ModelSelector from './components/ModelSelector';
 import ServerStatus from './components/ServerStatus';
+import MarketPage from './pages/MarketPage';
+import ModelsPage from './pages/ModelsPage';
 import PromptsPage from './pages/PromptsPage';
 import ReportsPage from './pages/ReportsPage';
-import MarketPage from './pages/MarketPage';
 
 function DarkModeToggle() {
   const { mode, setMode } = useColorScheme();
@@ -56,6 +57,7 @@ function NavTab({ to, children }) {
 function App() {
   const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
   const [chatKey, setChatKey] = useState(0);
+  const [modelsVersion, setModelsVersion] = useState(0);
 
   return (
     <CssVarsProvider defaultMode="dark">
@@ -91,11 +93,12 @@ function App() {
               <NavTab to="/prompts">Prompts</NavTab>
               <NavTab to="/reports">Reports</NavTab>
               <NavTab to="/market">Market</NavTab>
+              <NavTab to="/models">Models</NavTab>
             </Box>
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ModelSelector value={selectedModel} onChange={setSelectedModel} />
+            <ModelSelector value={selectedModel} onChange={setSelectedModel} refreshTrigger={modelsVersion} />
             <ServerStatus />
             <Tooltip title="Clear chat" placement="bottom">
               <IconButton
@@ -121,6 +124,7 @@ function App() {
           <Route path="/prompts" element={<PromptsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/market" element={<MarketPage />} />
+          <Route path="/models" element={<ModelsPage onModelsChanged={() => setModelsVersion((v) => v + 1)} />} />
         </Routes>
       </Box>
     </CssVarsProvider>

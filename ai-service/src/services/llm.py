@@ -7,10 +7,11 @@ the Anthropic SDK instead.
 """
 
 import json
-import os
 from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
+
+from db.models_db import get_model_with_key
 
 SYSTEM_PROMPT = """You are an expert stock market analyst and financial advisor.
 You help users analyze stocks, evaluate risk, understand market trends, and build
@@ -23,17 +24,13 @@ better investment theses. For each analysis you provide:
 You also help the user improve their prompts and analysis frameworks over time."""
 
 
-def _get_client(model_config: dict) -> AsyncOpenAI:
-    api_key_env = model_config["api_key_env"]
-    api_key = os.getenv(api_key_env)
-    if not api_key:
-        raise EnvironmentError(
-            f"API key not configured. Set the '{api_key_env}' environment variable."
-        )
-    return AsyncOpenAI(
-        api_key=api_key,
-        base_url=model_config["base_url"],
-    )
+def _get_client(model_id: str) -> AsyncOpenAI:
+    row = get_model_with_key(model_id)
+    if not row:
+        raise KeyError(f"Unknown model '{model_id}'")
+    if not row.get("api_key"):
+        raise EnvironmentError(f"API key not configured for model '{model_id}'")
+    return AsyncOpenAI(api_key=row["api_key"], base_url=row["base_url"])
 
 
 def _build_attachment_block(attachments: list[dict]) -> str:
@@ -63,7 +60,7 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
 
 
 async def stream_chat(
-    model_config: dict,
+    model_id: str,
     messages: list[dict],
     attachments: list[dict] | None = None,
     system_prompt: str = SYSTEM_PROMPT,
@@ -73,13 +70,13 @@ async def stream_chat(
     Each data event: data: {"content": "<token>"}\n\n
     Final event:     data: [DONE]\n\n
     """
-    client = _get_client(model_config)
+    client = _get_client(model_id)
 
     enriched = _inject_attachments(messages, attachments or [])
     full_messages = [{"role": "system", "content": system_prompt}, *enriched]
 
     stream = await client.chat.completions.create(
-        model=model_config["id"],
+        model=model_id,
         messages=full_messages,
         stream=True,
     )

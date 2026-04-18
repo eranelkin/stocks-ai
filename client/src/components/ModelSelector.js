@@ -3,7 +3,7 @@ import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
 import Tooltip from '@mui/joy/Tooltip';
 
-function ModelSelector({ value, onChange }) {
+function ModelSelector({ value, onChange, refreshTrigger = 0 }) {
   const [models, setModels] = useState([]);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ function ModelSelector({ value, onChange }) {
         }
       })
       .catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (models.length === 0) return null;
 
