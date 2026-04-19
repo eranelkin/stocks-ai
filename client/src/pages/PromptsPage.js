@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import BatchRunModal from '../components/BatchRunModal';
 import Box from '@mui/joy/Box';
 import Button from '@mui/joy/Button';
 import Chip from '@mui/joy/Chip';
@@ -221,13 +222,14 @@ function PromptModal({ open, onClose, onSave, initial, saving }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-function PromptsPage() {
+function PromptsPage({ selectedModel }) {
   const navigate = useNavigate();
   const [prompts, setPrompts]       = useState([]);
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
   const [modalOpen, setModalOpen]   = useState(false);
   const [editing, setEditing]       = useState(null); // null = add mode, object = edit mode
+  const [batchPrompt, setBatchPrompt] = useState(null); // prompt being batch-run
 
   const fetchPrompts = useCallback(async () => {
     setLoading(true);
@@ -339,7 +341,7 @@ function PromptsPage() {
                 <th>Prompt</th>
                 <th style={{ width: 160 }}>Files</th>
                 <th style={{ width: 160 }}>Created</th>
-                <th style={{ width: 130 }}>Actions</th>
+                <th style={{ width: 160 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -385,6 +387,11 @@ function PromptsPage() {
                           <PlayIcon />
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title="Batch run" placement="top">
+                        <IconButton size="sm" variant="plain" color="success" onClick={() => setBatchPrompt(p)}>
+                          <BatchIcon />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="Edit" placement="top">
                         <IconButton size="sm" variant="plain" color="neutral" onClick={() => openEdit(p)}>
                           <EditIcon />
@@ -417,11 +424,30 @@ function PromptsPage() {
         initial={editing}
         saving={saving}
       />
+
+      {/* Batch run modal */}
+      <BatchRunModal
+        open={!!batchPrompt}
+        onClose={() => setBatchPrompt(null)}
+        prompt={batchPrompt}
+        selectedModel={selectedModel}
+      />
     </Box>
   );
 }
 
 // ─── Inline SVG icons ─────────────────────────────────────────────────────────
+
+function BatchIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="4" rx="1" />
+      <rect x="2" y="10" width="20" height="4" rx="1" />
+      <rect x="2" y="17" width="20" height="4" rx="1" />
+      <path d="M18 5l2-2M18 5l2 2" strokeWidth="1.5" />
+    </svg>
+  );
+}
 
 function PlayIcon() {
   return (

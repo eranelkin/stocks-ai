@@ -121,7 +121,7 @@ function App() {
             path="/chat"
             element={<ChatWindow key={chatKey} selectedModel={selectedModel} />}
           />
-          <Route path="/prompts" element={<PromptsPage />} />
+          <Route path="/prompts" element={<PromptsPage selectedModel={selectedModel} />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/market" element={<MarketPage />} />
           <Route path="/models" element={<ModelsPage onModelsChanged={() => setModelsVersion((v) => v + 1)} />} />

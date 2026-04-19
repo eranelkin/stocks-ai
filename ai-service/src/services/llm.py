@@ -7,11 +7,12 @@ the Anthropic SDK instead.
 """
 
 import json
+import logging
 from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
-from db.models_db import get_model_with_key
+log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are an expert stock market analyst and financial advisor.
 You help users analyze stocks, evaluate risk, understand market trends, and build
@@ -22,15 +23,6 @@ better investment theses. For each analysis you provide:
 - Clear uncertainty communication when data is insufficient
 
 You also help the user improve their prompts and analysis frameworks over time."""
-
-
-def _get_client(model_id: str) -> AsyncOpenAI:
-    row = get_model_with_key(model_id)
-    if not row:
-        raise KeyError(f"Unknown model '{model_id}'")
-    if not row.get("api_key"):
-        raise EnvironmentError(f"API key not configured for model '{model_id}'")
-    return AsyncOpenAI(api_key=row["api_key"], base_url=row["base_url"])
 
 
 def _build_attachment_block(attachments: list[dict]) -> str:
@@ -59,31 +51,32 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
     return result
 
 
-async def stream_chat(
-    model_id: str,
+def build_messages(
     messages: list[dict],
     attachments: list[dict] | None = None,
     system_prompt: str = SYSTEM_PROMPT,
-) -> AsyncGenerator[str, None]:
-    """
-    Yields SSE-formatted strings.
-    Each data event: data: {"content": "<token>"}\n\n
-    Final event:     data: [DONE]\n\n
-    """
-    client = _get_client(model_id)
-
+) -> list[dict]:
     enriched = _inject_attachments(messages, attachments or [])
-    full_messages = [{"role": "system", "content": system_prompt}, *enriched]
+    return [{"role": "system", "content": system_prompt}, *enriched]
 
-    stream = await client.chat.completions.create(
+
+async def create_stream(model_id: str, api_key: str, base_url: str, full_messages: list[dict]):
+    """Opens the streaming request. Raises OpenAI errors before StreamingResponse starts."""
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    log.info("→ POST %s/chat/completions  model=%s", base_url.rstrip('/'), model_id)
+    return await client.chat.completions.create(
         model=model_id,
         messages=full_messages,
         stream=True,
     )
 
+
+async def iterate_stream(stream) -> AsyncGenerator[str, None]:
+    """Yields SSE strings from an already-opened stream. No I/O errors expected here."""
     async for chunk in stream:
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta
         if delta.content:
             yield f"data: {json.dumps({'content': delta.content})}\n\n"
-
     yield "data: [DONE]\n\n"

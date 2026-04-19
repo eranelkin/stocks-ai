@@ -4,6 +4,7 @@ import {
   deriveTitle,
   stripTableMarkers,
 } from "../utils/parseMarkdownTable";
+import BatchRunModal from "./BatchRunModal";
 import { useLocation, useNavigate } from "react-router-dom";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
@@ -164,6 +165,7 @@ function ChatWindow({ selectedModel }) {
   const [fileError, setFileError] = useState("");
   const [promptPickerOpen, setPromptPickerOpen] = useState(false);
   const [reportSaveState, setReportSaveState] = useState({}); // msgIndex → 'idle'|'saving'|'saved'
+  const [batchOpen, setBatchOpen] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
   const promptTitleRef = useRef(null);
@@ -529,6 +531,19 @@ function ChatWindow({ selectedModel }) {
             sx={{ flex: 1, resize: "none" }}
           />
 
+          <Tooltip title="Batch run" placement="top">
+            <IconButton
+              size="sm"
+              variant="plain"
+              color="success"
+              onClick={() => setBatchOpen(true)}
+              disabled={loading}
+              sx={{ mb: 0.25 }}
+            >
+              <BatchIcon />
+            </IconButton>
+          </Tooltip>
+
           <IconButton
             onClick={sendMessage}
             disabled={!canSend}
@@ -545,6 +560,13 @@ function ChatWindow({ selectedModel }) {
         open={promptPickerOpen}
         onClose={() => setPromptPickerOpen(false)}
         onPick={handlePickPrompt}
+      />
+
+      <BatchRunModal
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
+        prompt={{ title: 'Chat Batch', text: input || '(see attached files)', attachments }}
+        selectedModel={selectedModel}
       />
     </Box>
   );
@@ -678,6 +700,16 @@ function TableIcon() {
       <line x1="3" y1="15" x2="21" y2="15" />
       <line x1="9" y1="9" x2="9" y2="21" />
       <line x1="15" y1="9" x2="15" y2="21" />
+    </svg>
+  );
+}
+
+function BatchIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="4" rx="1" />
+      <rect x="2" y="10" width="20" height="4" rx="1" />
+      <rect x="2" y="17" width="20" height="4" rx="1" />
     </svg>
   );
 }
