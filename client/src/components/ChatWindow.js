@@ -4,6 +4,7 @@ import {
   deriveTitle,
   stripTableMarkers,
 } from "../utils/parseMarkdownTable";
+import { injectCurrentDate } from "../utils/injectCurrentDate";
 import BatchRunModal from "./BatchRunModal";
 import { useLocation, useNavigate } from "react-router-dom";
 import Box from "@mui/joy/Box";
@@ -174,7 +175,7 @@ function ChatWindow({ selectedModel }) {
   useEffect(() => {
     const payload = location.state?.promptPayload;
     if (!payload) return;
-    if (payload.text) setInput(payload.text);
+    if (payload.text) setInput(injectCurrentDate(payload.text));
     if (payload.attachments?.length) {
       setAttachments((prev) => {
         const existing = new Set(prev.map((a) => a.name));
@@ -196,8 +197,10 @@ function ChatWindow({ selectedModel }) {
   }, [messages]);
 
   function handlePickPrompt(prompt) {
-    if (prompt.text)
-      setInput((prev) => (prev ? prev + "\n" + prompt.text : prompt.text));
+    if (prompt.text) {
+      const text = injectCurrentDate(prompt.text);
+      setInput((prev) => (prev ? prev + "\n" + text : text));
+    }
     if (prompt.attachments?.length) {
       setAttachments((prev) => {
         const existing = new Set(prev.map((a) => a.name));

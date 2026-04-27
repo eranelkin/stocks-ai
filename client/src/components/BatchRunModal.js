@@ -18,6 +18,7 @@ import Typography from '@mui/joy/Typography';
 
 import { parseMarkdownTable } from '../utils/parseMarkdownTable';
 import { streamChat } from '../utils/streamChat';
+import { injectCurrentDate } from '../utils/injectCurrentDate';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -154,7 +155,7 @@ export default function BatchRunModal({ open, onClose, prompt, selectedModel }) 
 
         const fullText = await streamChat({
           model: selectedModel,
-          messages: [{ role: 'user', content: prompt.text }],
+          messages: [{ role: 'user', content: injectCurrentDate(prompt.text) }],
           attachments: [...contextAttachments, chunkAttachment],
           signal: controller.signal,
           onToken: (token) =>
