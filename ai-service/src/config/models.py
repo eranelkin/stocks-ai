@@ -44,14 +44,7 @@ MODELS: list[dict] = [
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "api_key_env": "GEMINI_API_KEY",
     },
-    {
-        "id": "gemini-1.5-flash-8b",
-        "name": "Gemini 1.5 Flash 8B (Google)",
-        "provider": "openai_compatible",
-        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "api_key_env": "GEMINI_API_KEY",
-    },
-    # --- Future models: just uncomment and set the matching env var ---
+# --- Future models: just uncomment and set the matching env var ---
     # {
     #     "id": "gpt-4o",
     #     "name": "GPT-4o",

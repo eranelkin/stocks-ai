@@ -377,82 +377,6 @@ function FearGreedGauge({ score }) {
   );
 }
 
-// ── Component breakdown ───────────────────────────────────────────────────────
-
-function capitalize(str) {
-  return str.charAt(0) + str.slice(1).toLowerCase().replace("/", "/");
-}
-
-function ComponentRow({ name, val, desc, raw }) {
-  const zone = getZone(val);
-  return (
-    <Tooltip
-      title={raw ? `${desc} · ${raw}` : desc}
-      placement="top-start"
-      variant="soft"
-    >
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "130px 1fr 38px 130px",
-          alignItems: "center",
-          gap: 2,
-          py: 1,
-          "&:not(:last-child)": {
-            borderBottom: "1px solid",
-            borderColor: "divider",
-          },
-        }}
-      >
-        <Typography level="body-sm" fontWeight="md">
-          {capitalize(name)}
-        </Typography>
-
-        {/* Bar track */}
-        <Box
-          sx={{
-            height: 8,
-            borderRadius: 4,
-            bgcolor: "neutral.softBg",
-            overflow: "hidden",
-          }}
-        >
-          <Box
-            sx={{
-              height: "100%",
-              width: `${val}%`,
-              bgcolor: zone.color,
-              borderRadius: 4,
-              transition: "width 0.9s cubic-bezier(0.25,0.8,0.25,1)",
-            }}
-          />
-        </Box>
-
-        <Typography
-          level="body-sm"
-          textColor="neutral.400"
-          sx={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-        >
-          {val}
-        </Typography>
-
-        <Chip
-          size="sm"
-          variant="soft"
-          sx={{
-            bgcolor: zone.color + "28",
-            color: zone.color,
-            fontWeight: 600,
-            fontSize: "0.68rem",
-          }}
-        >
-          {zone.label}
-        </Chip>
-      </Box>
-    </Tooltip>
-  );
-}
-
 // ── Historical chart ─────────────────────────────────────────────────────────
 
 const RANGES = [
@@ -742,26 +666,6 @@ function MarketPage() {
           <FearGreedBar score={data.score} />
           <FearGreedGauge score={data.score} />
         </Box>
-
-        {/* Component breakdown */}
-        <Sheet variant="outlined" sx={{ borderRadius: "lg", p: 3 }}>
-          <Typography
-            level="body-xs"
-            textColor="neutral.500"
-            sx={{ letterSpacing: "0.1em", fontWeight: 700, mb: 1.5 }}
-          >
-            COMPONENTS
-          </Typography>
-          {data.components.map((c) => (
-            <ComponentRow
-              key={c.name}
-              name={c.name}
-              val={c.val}
-              desc={c.desc}
-              raw={c.raw}
-            />
-          ))}
-        </Sheet>
 
         {/* Historical trend chart */}
         <FearGreedHistory />
