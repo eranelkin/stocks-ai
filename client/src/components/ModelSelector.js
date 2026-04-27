@@ -12,7 +12,9 @@ function ModelSelector({ value, onChange, refreshTrigger = 0 }) {
       .then((data) => {
         setModels(data);
         if (!value) {
-          const def = data.find((m) => m.default) ?? data[0];
+          const saved = localStorage.getItem('selectedModel');
+          const match = saved && data.find((m) => m.id === saved);
+          const def = match || data.find((m) => m.default) || data[0];
           if (def) onChange(def.id);
         }
       })

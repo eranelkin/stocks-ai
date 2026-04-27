@@ -596,7 +596,7 @@ function FearGreedHistory() {
             />
             <XAxis
               dataKey="date"
-              tick={{ fill: "#666", fontSize: 11 }}
+              tick={{ fill: "#aaa", fontSize: 11 }}
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
@@ -610,7 +610,7 @@ function FearGreedHistory() {
             />
             <YAxis
               domain={[0, 100]}
-              tick={{ fill: "#666", fontSize: 11 }}
+              tick={{ fill: "#aaa", fontSize: 11 }}
               tickLine={false}
               axisLine={false}
               ticks={[0, 25, 45, 55, 75, 100]}

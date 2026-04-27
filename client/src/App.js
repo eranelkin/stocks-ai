@@ -55,7 +55,14 @@ function NavTab({ to, children }) {
 }
 
 function App() {
-  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [selectedModel, setSelectedModel] = useState(
+    () => localStorage.getItem('selectedModel') || ''
+  );
+
+  const handleModelChange = (model) => {
+    setSelectedModel(model);
+    localStorage.setItem('selectedModel', model);
+  };
   const [chatKey, setChatKey] = useState(0);
   const [modelsVersion, setModelsVersion] = useState(0);
 
@@ -98,7 +105,7 @@ function App() {
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ModelSelector value={selectedModel} onChange={setSelectedModel} refreshTrigger={modelsVersion} />
+            <ModelSelector value={selectedModel} onChange={handleModelChange} refreshTrigger={modelsVersion} />
             <ServerStatus />
             <Tooltip title="Clear chat" placement="bottom">
               <IconButton
