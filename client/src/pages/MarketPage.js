@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
 import CircularProgress from "@mui/joy/CircularProgress";
@@ -609,150 +609,339 @@ function extractChartData(tableData) {
   });
 }
 
-function PredictionTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
+// ── Inline markdown (bold / italic) ──────────────────────────────────────────
+
+function inlineMd(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  if (parts.length === 1) return text;
   return (
-    <Sheet variant="outlined" sx={{ p: 1.5, borderRadius: "sm" }}>
-      <Typography level="body-xs" textColor="neutral.400">
-        {d.name}
-      </Typography>
-      <Typography
-        level="body-sm"
-        sx={{ fontWeight: 700, color: d.value >= 0 ? "#66bb6a" : "#ef5350" }}
-      >
-        {d.raw}
-      </Typography>
-    </Sheet>
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**"))
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith("*") && part.endsWith("*"))
+          return <em key={i}>{part.slice(1, -1)}</em>;
+        return part;
+      })}
+    </>
   );
 }
 
-function PredictionSection({ title, text, loading, streaming, error }) {
+function MarkdownRenderer({ text, streaming }) {
+  const lines = text.split("\n");
+  let key = 0;
+  const nodes = [];
+  let prevBlank = false;
+
+  for (const line of lines) {
+    const t = line.trim();
+    // Skip raw table rows — chart shows the data
+    if (t.startsWith("|") || /^[\s|:—-]+$/.test(t)) continue;
+
+    if (t.startsWith("# ")) {
+      nodes.push(
+        <Typography key={key++} level="title-md" fontWeight="xl" sx={{ mt: 2.5, mb: 1 }}>
+          {t.slice(2)}
+        </Typography>
+      );
+    } else if (t.startsWith("## ")) {
+      nodes.push(
+        <Typography key={key++} level="title-sm" fontWeight="xl"
+          sx={{ mt: 2, mb: 0.75, pb: 0.75, borderBottom: "1px solid", borderColor: "divider" }}>
+          {t.slice(3)}
+        </Typography>
+      );
+    } else if (t.startsWith("### ")) {
+      nodes.push(
+        <Typography key={key++} level="body-md" fontWeight="xl"
+          sx={{ mt: 1.5, mb: 0.5, color: "primary.300" }}>
+          {t.slice(4)}
+        </Typography>
+      );
+    } else if (t.startsWith("- ") || t.startsWith("* ")) {
+      nodes.push(
+        <Box key={key++} sx={{ display: "flex", gap: 1, mb: 0.5, ml: 0.5 }}>
+          <Typography level="body-sm" sx={{ color: "primary.400", flexShrink: 0, mt: "2px" }}>›</Typography>
+          <Typography level="body-sm" sx={{ lineHeight: 1.65 }}>{inlineMd(t.slice(2))}</Typography>
+        </Box>
+      );
+    } else if (t === "") {
+      if (!prevBlank) nodes.push(<Box key={key++} sx={{ height: 8 }} />);
+      prevBlank = true;
+      continue;
+    } else {
+      nodes.push(
+        <Typography key={key++} level="body-sm" sx={{ mb: 0.5, lineHeight: 1.7 }}>
+          {inlineMd(t)}
+        </Typography>
+      );
+    }
+    prevBlank = false;
+  }
+
+  return (
+    <Box>
+      {nodes}
+      {streaming && (
+        <Box component="span" sx={{
+          display: "inline-block", width: "2px", height: "14px",
+          bgcolor: "primary.400", ml: 0.5, verticalAlign: "middle",
+          animation: "cursorBlink 0.75s step-end infinite",
+          "@keyframes cursorBlink": {
+            "0%,100%": { opacity: 1 },
+            "50%": { opacity: 0 },
+          },
+        }} />
+      )}
+    </Box>
+  );
+}
+
+// ── Shimmer skeleton while AI runs ───────────────────────────────────────────
+
+function LoadingSkeleton() {
+  const shimmer = {
+    background: "linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 100%)",
+    backgroundSize: "200% 100%",
+    animation: "skeletonShimmer 1.6s ease-in-out infinite",
+    "@keyframes skeletonShimmer": {
+      "0%": { backgroundPosition: "200% 0" },
+      "100%": { backgroundPosition: "-200% 0" },
+    },
+  };
+
+  return (
+    <Box sx={{ py: 0.5 }}>
+      {[90, 73, 83, 61, 77].map((w, i) => (
+        <Box key={i} sx={{
+          height: 11, borderRadius: "md", mb: 1.5, width: `${w}%`,
+          animationDelay: `${i * 0.12}s`, ...shimmer,
+        }} />
+      ))}
+
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2.5, mb: 3 }}>
+        <CircularProgress size="sm" sx={{ "--CircularProgress-size": "16px" }} />
+        <Typography level="body-xs" textColor="neutral.500">
+          AI is analysing the market…
+        </Typography>
+      </Box>
+
+      {/* Fake bar chart */}
+      <Box sx={{
+        display: "flex", alignItems: "flex-end", gap: 0.75,
+        height: 90, px: 1, borderBottom: "1px solid", borderColor: "divider",
+      }}>
+        {[55, 28, 72, 40, 65, 22, 50, 35, 68, 45].map((h, i) => (
+          <Box key={i} sx={{
+            flex: 1, height: `${h}%`, borderRadius: "4px 4px 0 0",
+            background: i % 2 === 0
+              ? "linear-gradient(180deg,rgba(76,175,80,.25),rgba(76,175,80,.05))"
+              : "linear-gradient(180deg,rgba(239,83,80,.25),rgba(239,83,80,.05))",
+            animationDelay: `${i * 0.08}s`, ...shimmer,
+          }} />
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+// ── Gradient bar chart ────────────────────────────────────────────────────────
+
+function PredictionChart({ data }) {
+  const posId = useId();
+  const negId = useId();
+
+  return (
+    <Box>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+        <Typography level="body-xs" textColor="neutral.400"
+          sx={{ letterSpacing: "0.1em", fontWeight: 700 }}>
+          PREDICTION · {data[0]?.valueLabel?.toUpperCase()}
+        </Typography>
+        <Box sx={{ display: "flex", gap: 2 }}>
+          {[["#66bb6a", "Bullish"], ["#ef5350", "Bearish"]].map(([color, label]) => (
+            <Box key={label} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: 1, bgcolor: color }} />
+              <Typography level="body-xs" textColor="neutral.400">{label}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 58 }}>
+          <defs>
+            <linearGradient id={posId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#66bb6a" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="#2e7d32" stopOpacity={0.65} />
+            </linearGradient>
+            <linearGradient id={negId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef5350" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="#b71c1c" stopOpacity={0.65} />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+          <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
+          <XAxis dataKey="name" tick={{ fill: "#777", fontSize: 11 }} tickLine={false}
+            axisLine={false} angle={-40} textAnchor="end" interval={0} />
+          <YAxis tick={{ fill: "#777", fontSize: 11 }} tickLine={false} axisLine={false} />
+          <RechartsTooltip content={<PredictionTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]} animationDuration={900}>
+            {data.map((entry, i) => (
+              <Cell key={i} fill={`url(#${entry.value >= 0 ? posId : negId})`} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </Box>
+  );
+}
+
+function PredictionTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const pos = d.value >= 0;
+  return (
+    <Box sx={{
+      px: 1.5, py: 1, borderRadius: "md",
+      bgcolor: "background.surface",
+      border: "1px solid",
+      borderColor: pos ? "rgba(102,187,106,0.35)" : "rgba(239,83,80,0.35)",
+    }}>
+      <Typography level="body-xs" textColor="neutral.400" sx={{ mb: 0.25 }}>{d.name}</Typography>
+      <Typography level="body-sm" fontWeight="xl" sx={{ color: pos ? "#66bb6a" : "#ef5350" }}>
+        {d.raw}
+      </Typography>
+    </Box>
+  );
+}
+
+// ── Section themes ────────────────────────────────────────────────────────────
+
+const SECTION_THEMES = {
+  "Market Prediction": {
+    topBar: "linear-gradient(90deg,#667eea,#764ba2)",
+    iconBg: "linear-gradient(135deg,#667eea,#764ba2)",
+    Icon: BrainIcon,
+  },
+  "Sectors Prediction": {
+    topBar: "linear-gradient(90deg,#11998e,#38ef7d)",
+    iconBg: "linear-gradient(135deg,#11998e,#38ef7d)",
+    Icon: SectorIcon,
+  },
+};
+
+function PredictionSection({ title, text, loading, streaming, error, cachedTs }) {
   const [open, setOpen] = useState(true);
   const tableData = !streaming && text ? parseMarkdownTable(text) : null;
   const chartData = tableData ? extractChartData(tableData) : null;
+  const theme = SECTION_THEMES[title] ?? SECTION_THEMES["Market Prediction"];
+
+  const cacheLabel = cachedTs && !loading && !streaming
+    ? (() => {
+        const s = Math.floor((Date.now() - cachedTs) / 1000);
+        return s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`;
+      })()
+    : null;
 
   return (
-    <Sheet variant="outlined" sx={{ borderRadius: "lg", p: 3, mb: 3 }}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          mb: open ? 2 : 0,
-        }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography level="title-md" fontWeight="lg">
-            {title}
-          </Typography>
+    <Sheet variant="outlined" sx={{
+      borderRadius: "xl", overflow: "hidden", mb: 3,
+      borderColor: "neutral.800",
+      transition: "border-color 0.2s",
+      "&:hover": { borderColor: "neutral.700" },
+    }}>
+      {/* Gradient accent bar */}
+      <Box sx={{ height: 3, background: theme.topBar }} />
+
+      {/* Clickable header */}
+      <Box onClick={() => setOpen((o) => !o)} sx={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        px: 2.5, py: 1.75, cursor: "pointer", userSelect: "none",
+        borderBottom: open ? "1px solid" : "none", borderColor: "divider",
+        transition: "background 0.15s",
+        "&:hover": { bgcolor: "rgba(255,255,255,0.015)" },
+      }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          {/* Icon badge */}
+          <Box sx={{
+            width: 34, height: 34, borderRadius: "md", flexShrink: 0,
+            background: theme.iconBg,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <theme.Icon />
+          </Box>
+
+          <Box>
+            <Typography level="title-sm" fontWeight="xl">{title}</Typography>
+            {cacheLabel && (
+              <Typography level="body-xs" textColor="neutral.500">
+                Cached · {cacheLabel}
+              </Typography>
+            )}
+          </Box>
+
           {streaming && (
-            <Chip size="sm" color="primary" variant="soft">
-              Streaming…
-            </Chip>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+              <Box sx={{
+                width: 7, height: 7, borderRadius: "50%", bgcolor: "#4caf50",
+                animation: "livePulse 1.2s ease-in-out infinite",
+                "@keyframes livePulse": {
+                  "0%,100%": { opacity: 1, transform: "scale(1)" },
+                  "50%": { opacity: 0.35, transform: "scale(0.75)" },
+                },
+              }} />
+              <Typography level="body-xs" fontWeight="xl"
+                sx={{ color: "#4caf50", letterSpacing: "0.06em" }}>
+                LIVE
+              </Typography>
+            </Box>
           )}
         </Box>
-        <Button
-          size="sm"
-          variant="plain"
-          color="neutral"
-          onClick={() => setOpen((o) => !o)}
-          sx={{ minWidth: 0, px: 0.5 }}
-        >
+
+        <Box sx={{ color: "neutral.500" }}>
           {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
-        </Button>
+        </Box>
       </Box>
 
+      {/* Body */}
       {open && (
-        loading ? (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-              py: 4,
-              justifyContent: "center",
-            }}
-          >
-            <CircularProgress size="sm" />
-            <Typography level="body-sm" textColor="neutral.500">
-              Running analysis…
-            </Typography>
-          </Box>
-        ) : error ? (
-          <Typography color="danger" level="body-sm">
-            {error}
-          </Typography>
-        ) : text ? (
-          <>
-            {/* Response text */}
-            <Sheet
-              variant="soft"
-              sx={{
-                borderRadius: "md",
-                p: 2,
-                mb: chartData ? 3 : 0,
-                maxHeight: 320,
-                overflow: "auto",
-              }}
-            >
-              <Typography
-                level="body-sm"
-                sx={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: "0.78rem" }}
-              >
-                {text}
+        <Box sx={{ px: 2.5, py: 2.5 }}>
+          {loading ? (
+            <LoadingSkeleton />
+          ) : error ? (
+            <Box sx={{
+              display: "flex", alignItems: "flex-start", gap: 1.5,
+              p: 2, borderRadius: "md",
+              bgcolor: "rgba(239,83,80,0.07)",
+              border: "1px solid rgba(239,83,80,0.18)",
+            }}>
+              <Typography level="body-sm" sx={{ color: "#ef5350", lineHeight: 1.6 }}>
+                ⚠ {error}
               </Typography>
-            </Sheet>
-
-            {/* Prediction chart */}
-            {chartData && chartData.length > 0 && (
-              <Box>
-                <Typography
-                  level="body-xs"
-                  textColor="neutral.500"
-                  sx={{ mb: 1.5, letterSpacing: "0.1em", fontWeight: 700 }}
-                >
-                  PREDICTION CHART — {chartData[0].valueLabel}
-                </Typography>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart
-                    data={chartData}
-                    margin={{ top: 4, right: 8, left: -20, bottom: 50 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.07)"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: "#aaa", fontSize: 11 }}
-                      tickLine={false}
-                      axisLine={false}
-                      angle={-35}
-                      textAnchor="end"
-                      interval={0}
-                    />
-                    <YAxis
-                      tick={{ fill: "#aaa", fontSize: 11 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <RechartsTooltip content={<PredictionTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {chartData.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={entry.value >= 0 ? "#66bb6a" : "#ef5350"}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+            </Box>
+          ) : text ? (
+            <>
+              <Box sx={{
+                maxHeight: 380, overflow: "auto", pr: 0.5,
+                mb: chartData ? 3 : 0,
+                "&::-webkit-scrollbar": { width: 4 },
+                "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+                "&::-webkit-scrollbar-thumb": { borderRadius: 2, bgcolor: "rgba(255,255,255,0.15)" },
+              }}>
+                <MarkdownRenderer text={text} streaming={streaming} />
               </Box>
-            )}
-          </>
-        ) : null
+
+              {chartData && chartData.length > 0 && (
+                <>
+                  <Box sx={{ height: "1px", bgcolor: "divider", mb: 3 }} />
+                  <PredictionChart data={chartData} />
+                </>
+              )}
+            </>
+          ) : null}
+        </Box>
       )}
     </Sheet>
   );
@@ -874,87 +1063,105 @@ function MarketPage({ selectedModel }) {
 
   return (
     <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
-      <Box sx={{ maxWidth: 920, mx: "auto" }}>
-        {/* Page header */}
-        <Box sx={{ mb: 3 }}>
-          <Typography level="h3">Market Overview</Typography>
+      <Box sx={{ maxWidth: 960, mx: "auto" }}>
+        {/* ── Page header ── */}
+        <Box sx={{ mb: 4 }}>
+          <Typography level="h2" fontWeight="xl" sx={{
+            background: "linear-gradient(90deg, #fff 0%, rgba(255,255,255,0.55) 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            mb: 0.5,
+          }}>
+            Market Overview
+          </Typography>
           <Typography level="body-sm" textColor="neutral.500">
-            Live market analysis — data refreshes automatically every minute.
+            Real-time sentiment &amp; AI-powered predictions — refreshes every minute
           </Typography>
         </Box>
 
         {/* ── Section 1: Fear & Greed ── */}
-        <Sheet variant="outlined" sx={{ borderRadius: "lg", p: 3, mb: 3 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              mb: fgOpen ? 2 : 0,
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography level="title-md" fontWeight="lg">
-                Fear &amp; Greed Index
-              </Typography>
-              {fgUpdated && (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  {fgData?.stale && (
-                    <Chip size="sm" color="warning" variant="soft">
-                      Stale
-                    </Chip>
-                  )}
-                  <Typography level="body-xs" textColor="neutral.400">
-                    Updated {fgUpdated}
-                  </Typography>
-                </Box>
-              )}
+        <Sheet variant="outlined" sx={{
+          borderRadius: "xl", overflow: "hidden", mb: 3,
+          borderColor: "neutral.800",
+          transition: "border-color 0.2s",
+          "&:hover": { borderColor: "neutral.700" },
+        }}>
+          {/* Accent bar */}
+          <Box sx={{ height: 3, background: "linear-gradient(90deg,#ff9800,#ef5350,#e91e63)" }} />
+
+          {/* Header */}
+          <Box onClick={() => setFgOpen((o) => !o)} sx={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            px: 2.5, py: 1.75, cursor: "pointer", userSelect: "none",
+            borderBottom: fgOpen ? "1px solid" : "none", borderColor: "divider",
+            transition: "background 0.15s",
+            "&:hover": { bgcolor: "rgba(255,255,255,0.015)" },
+          }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Box sx={{
+                width: 34, height: 34, borderRadius: "md", flexShrink: 0,
+                background: "linear-gradient(135deg,#ff9800,#e91e63)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <PulseIcon />
+              </Box>
+              <Box>
+                <Typography level="title-sm" fontWeight="xl">Fear &amp; Greed Index</Typography>
+                {fgUpdated && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                    {fgData?.stale && (
+                      <Chip size="sm" color="warning" variant="soft" sx={{ "--Chip-paddingInline": "6px" }}>
+                        Stale
+                      </Chip>
+                    )}
+                    <Typography level="body-xs" textColor="neutral.500">
+                      Updated {fgUpdated}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
             </Box>
-            <Button
-              size="sm"
-              variant="plain"
-              color="neutral"
-              onClick={() => setFgOpen((o) => !o)}
-              sx={{ minWidth: 0, px: 0.5 }}
-            >
+            <Box sx={{ color: "neutral.500" }}>
               {fgOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
-            </Button>
+            </Box>
           </Box>
 
+          {/* Body */}
           {fgOpen && (
             fgLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
                 <CircularProgress size="sm" />
               </Box>
             ) : fgError ? (
-              <Typography color="danger" level="body-sm">
-                {fgError}
-              </Typography>
+              <Box sx={{ px: 2.5, py: 2 }}>
+                <Box sx={{
+                  p: 2, borderRadius: "md",
+                  bgcolor: "rgba(239,83,80,0.07)",
+                  border: "1px solid rgba(239,83,80,0.18)",
+                }}>
+                  <Typography level="body-sm" sx={{ color: "#ef5350" }}>⚠ {fgError}</Typography>
+                </Box>
+              </Box>
             ) : fgData ? (
-              <>
-                <Box
-                  sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
-                >
+              <Box sx={{ px: 2.5, py: 2.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                   <FearGreedBar score={fgData.score} />
                   <FearGreedGauge score={fgData.score} />
                 </Box>
 
-                {/* Collapsible historical trend */}
-                <Box sx={{ mt: 2 }}>
-                  <Button
-                    size="sm"
-                    variant="plain"
-                    color="neutral"
-                    startDecorator={
-                      historyOpen ? <ChevronUpIcon /> : <ChevronDownIcon />
-                    }
-                    onClick={() => setHistoryOpen((o) => !o)}
+                {/* Historical trend toggle */}
+                <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                  <Button size="sm" variant="plain" color="neutral"
+                    startDecorator={historyOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                    onClick={(e) => { e.stopPropagation(); setHistoryOpen((o) => !o); }}
+                    sx={{ color: "neutral.400", "&:hover": { color: "neutral.200" } }}
                   >
                     {historyOpen ? "Hide" : "Show"} Historical Trend
                   </Button>
                   {historyOpen && <FearGreedHistory />}
                 </Box>
-              </>
+              </Box>
             ) : null
           )}
         </Sheet>
@@ -966,6 +1173,7 @@ function MarketPage({ selectedModel }) {
           loading={marketLoading}
           streaming={marketStreaming}
           error={marketError}
+          cachedTs={SESSION_CACHE.marketPrediction.ts || null}
         />
 
         {/* ── Section 3: Sectors Prediction ── */}
@@ -975,9 +1183,38 @@ function MarketPage({ selectedModel }) {
           loading={sectorsLoading}
           streaming={sectorsStreaming}
           error={sectorsError}
+          cachedTs={SESSION_CACHE.sectorsPrediction.ts || null}
         />
       </Box>
     </Box>
+  );
+}
+
+function BrainIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a4 4 0 0 1 4 4 4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1-4-4 4 4 0 0 1 4-4 4 4 0 0 1 4-4z" />
+      <line x1="12" y1="6" x2="12" y2="18" />
+      <line x1="6" y1="12" x2="18" y2="12" />
+    </svg>
+  );
+}
+
+function SectorIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v10l8.5 4.9" />
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 12L3.5 7.1" />
+    </svg>
+  );
+}
+
+function PulseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
   );
 }
 
