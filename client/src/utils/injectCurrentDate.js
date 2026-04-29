@@ -1,25 +1,39 @@
-/**
- * Replaces <CURRENT_DATE> in a string with the current date/time in EDT.
- * Format: "April 27, 2026, 06:00 EDT"
- */
 export function injectCurrentDate(text) {
-  if (!text || !text.includes('<CURRENT_DATE>')) return text;
+  if (!text) return text;
+  let result = text;
 
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZoneName: 'short',
-  });
+  if (result.includes('<CURRENT_DATE>')) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZoneName: 'short',
+    });
+    const parts = formatter.formatToParts(new Date());
+    const get = (type) => parts.find((p) => p.type === type)?.value ?? '';
+    const dateStr = `${get('month')} ${get('day')}, ${get('year')}, ${get('hour')}:${get('minute')} ${get('timeZoneName')}`;
+    result = result.replaceAll('<CURRENT_DATE>', dateStr);
+  }
 
-  const parts = formatter.formatToParts(now);
-  const get = (type) => parts.find((p) => p.type === type)?.value ?? '';
+  if (result.includes('<MARKET_CURRENT_DATE>')) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const get = (type) => parts.find((p) => p.type === type)?.value ?? '';
+    const dateStr = `${get('month')} ${get('day')} ${get('year')} at ${get('hour')}:${get('minute')} ${get('dayPeriod')}`;
+    result = result.replaceAll('<MARKET_CURRENT_DATE>', dateStr);
+  }
 
-  const dateStr = `${get('month')} ${get('day')}, ${get('year')}, ${get('hour')}:${get('minute')} ${get('timeZoneName')}`;
-  return text.replaceAll('<CURRENT_DATE>', dateStr);
+  return result;
 }

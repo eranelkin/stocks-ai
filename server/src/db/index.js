@@ -21,6 +21,11 @@ db.exec(`
   )
 `);
 
+// Add category column if it doesn't exist yet (migration)
+try {
+  db.exec(`ALTER TABLE prompts ADD COLUMN category TEXT NOT NULL DEFAULT 'personal'`);
+} catch {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS reports (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,

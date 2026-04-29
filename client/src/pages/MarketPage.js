@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Box from "@mui/joy/Box";
+import Button from "@mui/joy/Button";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Chip from "@mui/joy/Chip";
 import Sheet from "@mui/joy/Sheet";
@@ -11,13 +12,19 @@ import Typography from "@mui/joy/Typography";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import { injectCurrentDate } from "../utils/injectCurrentDate";
+import { parseMarkdownTable } from "../utils/parseMarkdownTable";
+import { streamChat } from "../utils/streamChat";
 
 // ── Zone helper ───────────────────────────────────────────────────────────────
 
@@ -569,108 +576,424 @@ function FearGreedHistory() {
   );
 }
 
+// ── Session cache (module-level, cleared on page refresh) ────────────────────
+
+const SESSION_CACHE = {
+  feargreed: { data: null, ts: 0 },
+  marketPrediction: { text: null, ts: 0 },
+  sectorsPrediction: { text: null, ts: 0 },
+};
+const CACHE_TTL = 60_000; // 1 minute
+
+function isFresh(ts) {
+  return ts > 0 && Date.now() - ts < CACHE_TTL;
+}
+
+// ── Prediction helpers ────────────────────────────────────────────────────────
+
+function extractChartData(tableData) {
+  if (!tableData) return null;
+  const { columns, rows } = tableData;
+  let valueCol = -1;
+  for (let ci = 1; ci < columns.length; ci++) {
+    if (rows.some((r) => /[0-9]/.test(r[ci] ?? ""))) {
+      valueCol = ci;
+      break;
+    }
+  }
+  if (valueCol === -1) return null;
+  return rows.map((row) => {
+    const raw = row[valueCol] ?? "0";
+    const num = parseFloat(raw.replace(/[^\d.+-]/g, "")) || 0;
+    return { name: row[0], value: num, raw, valueLabel: columns[valueCol] };
+  });
+}
+
+function PredictionTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <Sheet variant="outlined" sx={{ p: 1.5, borderRadius: "sm" }}>
+      <Typography level="body-xs" textColor="neutral.400">
+        {d.name}
+      </Typography>
+      <Typography
+        level="body-sm"
+        sx={{ fontWeight: 700, color: d.value >= 0 ? "#66bb6a" : "#ef5350" }}
+      >
+        {d.raw}
+      </Typography>
+    </Sheet>
+  );
+}
+
+function PredictionSection({ title, text, loading, streaming, error }) {
+  const [open, setOpen] = useState(true);
+  const tableData = !streaming && text ? parseMarkdownTable(text) : null;
+  const chartData = tableData ? extractChartData(tableData) : null;
+
+  return (
+    <Sheet variant="outlined" sx={{ borderRadius: "lg", p: 3, mb: 3 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: open ? 2 : 0,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography level="title-md" fontWeight="lg">
+            {title}
+          </Typography>
+          {streaming && (
+            <Chip size="sm" color="primary" variant="soft">
+              Streaming…
+            </Chip>
+          )}
+        </Box>
+        <Button
+          size="sm"
+          variant="plain"
+          color="neutral"
+          onClick={() => setOpen((o) => !o)}
+          sx={{ minWidth: 0, px: 0.5 }}
+        >
+          {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
+        </Button>
+      </Box>
+
+      {open && (
+        loading ? (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              py: 4,
+              justifyContent: "center",
+            }}
+          >
+            <CircularProgress size="sm" />
+            <Typography level="body-sm" textColor="neutral.500">
+              Running analysis…
+            </Typography>
+          </Box>
+        ) : error ? (
+          <Typography color="danger" level="body-sm">
+            {error}
+          </Typography>
+        ) : text ? (
+          <>
+            {/* Response text */}
+            <Sheet
+              variant="soft"
+              sx={{
+                borderRadius: "md",
+                p: 2,
+                mb: chartData ? 3 : 0,
+                maxHeight: 320,
+                overflow: "auto",
+              }}
+            >
+              <Typography
+                level="body-sm"
+                sx={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: "0.78rem" }}
+              >
+                {text}
+              </Typography>
+            </Sheet>
+
+            {/* Prediction chart */}
+            {chartData && chartData.length > 0 && (
+              <Box>
+                <Typography
+                  level="body-xs"
+                  textColor="neutral.500"
+                  sx={{ mb: 1.5, letterSpacing: "0.1em", fontWeight: 700 }}
+                >
+                  PREDICTION CHART — {chartData[0].valueLabel}
+                </Typography>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={chartData}
+                    margin={{ top: 4, right: 8, left: -20, bottom: 50 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(255,255,255,0.07)"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: "#aaa", fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      angle={-35}
+                      textAnchor="end"
+                      interval={0}
+                    />
+                    <YAxis
+                      tick={{ fill: "#aaa", fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <RechartsTooltip content={<PredictionTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {chartData.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={entry.value >= 0 ? "#66bb6a" : "#ef5350"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
+          </>
+        ) : null
+      )}
+    </Sheet>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-function MarketPage() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+function MarketPage({ selectedModel }) {
+  // ── Fear & Greed state ──
+  const [fgData, setFgData] = useState(SESSION_CACHE.feargreed.data);
+  const [fgLoading, setFgLoading] = useState(!isFresh(SESSION_CACHE.feargreed.ts));
+  const [fgError, setFgError] = useState(null);
+  const [fgOpen, setFgOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // ── Market Prediction state ──
+  const [marketText, setMarketText] = useState(SESSION_CACHE.marketPrediction.text ?? "");
+  const [marketLoading, setMarketLoading] = useState(!isFresh(SESSION_CACHE.marketPrediction.ts));
+  const [marketStreaming, setMarketStreaming] = useState(false);
+  const [marketError, setMarketError] = useState(null);
+
+  // ── Sectors Prediction state ──
+  const [sectorsText, setSectorsText] = useState(SESSION_CACHE.sectorsPrediction.text ?? "");
+  const [sectorsLoading, setSectorsLoading] = useState(!isFresh(SESSION_CACHE.sectorsPrediction.ts));
+  const [sectorsStreaming, setSectorsStreaming] = useState(false);
+  const [sectorsError, setSectorsError] = useState(null);
+
+  const abortRef = useRef(null);
 
   useEffect(() => {
-    fetch("/api/feargreed")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) throw new Error(d.error);
-        setData(d);
+    loadAll();
+    return () => abortRef.current?.abort();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadAll() {
+    if (!isFresh(SESSION_CACHE.feargreed.ts)) fetchFearGreed();
+
+    const needMarket = !isFresh(SESSION_CACHE.marketPrediction.ts);
+    const needSectors = !isFresh(SESSION_CACHE.sectorsPrediction.ts);
+    if (needMarket || needSectors) loadPredictions(needMarket, needSectors);
+  }
+
+  async function fetchFearGreed() {
+    setFgLoading(true);
+    try {
+      const r = await fetch("/api/feargreed");
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      SESSION_CACHE.feargreed = { data: d, ts: Date.now() };
+      setFgData(d);
+    } catch (e) {
+      setFgError(e.message);
+    } finally {
+      setFgLoading(false);
+    }
+  }
+
+  async function loadPredictions(needMarket, needSectors) {
+    if (!selectedModel) {
+      if (needMarket) { setMarketError("No model selected. Choose a model from the header."); setMarketLoading(false); }
+      if (needSectors) { setSectorsError("No model selected. Choose a model from the header."); setSectorsLoading(false); }
+      return;
+    }
+
+    let prompts = [];
+    try {
+      const r = await fetch("/api/prompts?category=market");
+      prompts = await r.json();
+    } catch {
+      if (needMarket) { setMarketError("Failed to load market prompts."); setMarketLoading(false); }
+      if (needSectors) { setSectorsError("Failed to load market prompts."); setSectorsLoading(false); }
+      return;
+    }
+
+    abortRef.current = new AbortController();
+    const { signal } = abortRef.current;
+
+    async function runPrompt(promptTitle, cacheKey, setText, setStreaming, setLoading, setError) {
+      const prompt = prompts.find((p) => p.title === promptTitle);
+      if (!prompt) {
+        setError(`Prompt "${promptTitle}" not found — add it in Prompts → Market tab.`);
+        setLoading(false);
+        return;
+      }
+      setStreaming(true);
+      try {
+        let full = "";
+        await streamChat({
+          model: selectedModel,
+          messages: [{ role: "user", content: injectCurrentDate(prompt.text) }],
+          attachments: prompt.attachments,
+          onToken: (chunk) => { full += chunk; setText(full); },
+          signal,
+        });
+        SESSION_CACHE[cacheKey] = { text: full, ts: Date.now() };
+      } catch (e) {
+        if (e.name !== "AbortError") setError(e.message);
+      } finally {
+        setStreaming(false);
+        setLoading(false);
+      }
+    }
+
+    await Promise.all([
+      needMarket
+        ? runPrompt("Market Prediction", "marketPrediction", setMarketText, setMarketStreaming, setMarketLoading, setMarketError)
+        : Promise.resolve(),
+      needSectors
+        ? runPrompt("Sectors Prediction", "sectorsPrediction", setSectorsText, setSectorsStreaming, setSectorsLoading, setSectorsError)
+        : Promise.resolve(),
+    ]);
+  }
+
+  const fgUpdated = fgData
+    ? new Date(fgData.timestamp).toLocaleString(undefined, {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading)
-    return (
-      <Box
-        sx={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-
-  if (error || !data)
-    return (
-      <Box
-        sx={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Typography color="danger" level="body-md">
-          {error ?? "No data available"}
-        </Typography>
-      </Box>
-    );
-
-  const updated = new Date(data.timestamp).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+    : null;
 
   return (
     <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
-      <Box sx={{ maxWidth: 860, mx: "auto" }}>
+      <Box sx={{ maxWidth: 920, mx: "auto" }}>
         {/* Page header */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            mb: 3,
-          }}
-        >
-          <Box>
-            <Typography level="h3">Market Overview</Typography>
-            <Typography level="body-sm">
-              Fear &amp; Greed Index — pick the style you prefer
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {data.stale && (
-              <Chip size="sm" color="warning" variant="soft">
-                Stale
-              </Chip>
-            )}
-            <Typography level="body-xs" textColor="neutral.400">
-              Updated {updated}
-            </Typography>
-          </Box>
+        <Box sx={{ mb: 3 }}>
+          <Typography level="h3">Market Overview</Typography>
+          <Typography level="body-sm" textColor="neutral.500">
+            Live market analysis — data refreshes automatically every minute.
+          </Typography>
         </Box>
 
-        {/* Both visualizations side by side */}
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 2,
-            mb: 3,
-          }}
-        >
-          <FearGreedBar score={data.score} />
-          <FearGreedGauge score={data.score} />
-        </Box>
+        {/* ── Section 1: Fear & Greed ── */}
+        <Sheet variant="outlined" sx={{ borderRadius: "lg", p: 3, mb: 3 }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              mb: fgOpen ? 2 : 0,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography level="title-md" fontWeight="lg">
+                Fear &amp; Greed Index
+              </Typography>
+              {fgUpdated && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  {fgData?.stale && (
+                    <Chip size="sm" color="warning" variant="soft">
+                      Stale
+                    </Chip>
+                  )}
+                  <Typography level="body-xs" textColor="neutral.400">
+                    Updated {fgUpdated}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+            <Button
+              size="sm"
+              variant="plain"
+              color="neutral"
+              onClick={() => setFgOpen((o) => !o)}
+              sx={{ minWidth: 0, px: 0.5 }}
+            >
+              {fgOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+            </Button>
+          </Box>
 
-        {/* Historical trend chart */}
-        <FearGreedHistory />
+          {fgOpen && (
+            fgLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size="sm" />
+              </Box>
+            ) : fgError ? (
+              <Typography color="danger" level="body-sm">
+                {fgError}
+              </Typography>
+            ) : fgData ? (
+              <>
+                <Box
+                  sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+                >
+                  <FearGreedBar score={fgData.score} />
+                  <FearGreedGauge score={fgData.score} />
+                </Box>
+
+                {/* Collapsible historical trend */}
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    size="sm"
+                    variant="plain"
+                    color="neutral"
+                    startDecorator={
+                      historyOpen ? <ChevronUpIcon /> : <ChevronDownIcon />
+                    }
+                    onClick={() => setHistoryOpen((o) => !o)}
+                  >
+                    {historyOpen ? "Hide" : "Show"} Historical Trend
+                  </Button>
+                  {historyOpen && <FearGreedHistory />}
+                </Box>
+              </>
+            ) : null
+          )}
+        </Sheet>
+
+        {/* ── Section 2: Market Prediction ── */}
+        <PredictionSection
+          title="Market Prediction"
+          text={marketText}
+          loading={marketLoading}
+          streaming={marketStreaming}
+          error={marketError}
+        />
+
+        {/* ── Section 3: Sectors Prediction ── */}
+        <PredictionSection
+          title="Sectors Prediction"
+          text={sectorsText}
+          loading={sectorsLoading}
+          streaming={sectorsStreaming}
+          error={sectorsError}
+        />
       </Box>
     </Box>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function ChevronUpIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
   );
 }
 

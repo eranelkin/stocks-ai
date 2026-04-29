@@ -170,10 +170,13 @@ function exportReportAsHtml(report) {
   const numericCols = new Set(
     report.columns
       .filter((c) => SORTABLE_COLS[c.toLowerCase()] === "number")
-      .map((c) => c.toLowerCase())
+      .map((c) => c.toLowerCase()),
   );
   const headerCells = report.columns
-    .map((col, i) => `<th data-col="${i}" data-dir="asc" style="cursor:pointer;user-select:none">${col} <span class="arrow" style="opacity:0.3">↑</span></th>`)
+    .map(
+      (col, i) =>
+        `<th data-col="${i}" data-dir="asc" style="cursor:pointer;user-select:none">${col} <span class="arrow" style="opacity:0.3">↑</span></th>`,
+    )
     .join("");
   const bodyRows = report.rows
     .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`)
@@ -247,7 +250,11 @@ table.querySelectorAll('th').forEach(th => {
   URL.revokeObjectURL(url);
 }
 
-const SORTABLE_COLS = { "symbol": "string", "confidence": "number", "success probability": "number" };
+const SORTABLE_COLS = {
+  symbol: "string",
+  confidence: "number",
+  "success probability": "number",
+};
 
 function DetailPanel({ report, onClose }) {
   const [sortCol, setSortCol] = useState(null);
@@ -314,12 +321,19 @@ function DetailPanel({ report, onClose }) {
               size="sm"
               variant="plain"
               color="neutral"
-              onClick={() => exportReportAsHtml({ ...report, rows: sortedRows })}
+              onClick={() =>
+                exportReportAsHtml({ ...report, rows: sortedRows })
+              }
             >
               <DownloadIcon />
             </IconButton>
           </Tooltip>
-          <IconButton size="sm" variant="plain" color="neutral" onClick={onClose}>
+          <IconButton
+            size="sm"
+            variant="plain"
+            color="neutral"
+            onClick={onClose}
+          >
             <CloseIcon />
           </IconButton>
         </Box>
@@ -360,7 +374,9 @@ function DetailPanel({ report, onClose }) {
                   >
                     {col}
                     {sortable && (
-                      <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3 }}>
+                      <span
+                        style={{ marginLeft: 4, opacity: active ? 1 : 0.3 }}
+                      >
                         {active && sortDir === "desc" ? "↓" : "↑"}
                       </span>
                     )}

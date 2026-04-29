@@ -130,7 +130,7 @@ function App() {
           />
           <Route path="/prompts" element={<PromptsPage selectedModel={selectedModel} />} />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/market" element={<MarketPage />} />
+          <Route path="/market" element={<MarketPage selectedModel={selectedModel} />} />
           <Route path="/models" element={<ModelsPage onModelsChanged={() => setModelsVersion((v) => v + 1)} />} />
         </Routes>
       </Box>

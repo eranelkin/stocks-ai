@@ -3,13 +3,20 @@ const db = require('../db');
 
 const router = Router();
 
+const VALID_CATEGORIES = ['personal', 'market'];
+
 function parsePrompt(row) {
   return { ...row, attachments: JSON.parse(row.attachments) };
 }
 
-// GET /api/prompts
+// GET /api/prompts?category=personal
 router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM prompts ORDER BY created_at DESC').all();
+  const category = VALID_CATEGORIES.includes(req.query.category)
+    ? req.query.category
+    : 'personal';
+  const rows = db
+    .prepare('SELECT * FROM prompts WHERE category = ? ORDER BY created_at DESC')
+    .all(category);
   res.json(rows.map(parsePrompt));
 });
 
@@ -22,13 +29,14 @@ router.get('/:id', (req, res) => {
 
 // POST /api/prompts
 router.post('/', (req, res) => {
-  const { title, text, attachments = [] } = req.body;
+  const { title, text, attachments = [], category = 'personal' } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'title is required' });
   if (!text?.trim())  return res.status(400).json({ error: 'text is required' });
+  const cat = VALID_CATEGORIES.includes(category) ? category : 'personal';
 
   const result = db
-    .prepare('INSERT INTO prompts (title, text, attachments) VALUES (?, ?, ?)')
-    .run(title.trim(), text.trim(), JSON.stringify(attachments));
+    .prepare('INSERT INTO prompts (title, text, attachments, category) VALUES (?, ?, ?, ?)')
+    .run(title.trim(), text.trim(), JSON.stringify(attachments), cat);
 
   const row = db.prepare('SELECT * FROM prompts WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(parsePrompt(row));
