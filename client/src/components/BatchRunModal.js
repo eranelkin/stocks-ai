@@ -56,12 +56,15 @@ function chunkArray(arr, size) {
   return chunks;
 }
 
-function deriveReportTitle(promptTitle, modelId) {
+function deriveReportTitle(promptTitle, selectedModels) {
   const date = new Date().toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
-  return `${promptTitle} — Batch — ${date} — ${modelId}`;
+  if (selectedModels.length === 1) {
+    return `${promptTitle} — Batch — ${date} — ${selectedModels[0]}`;
+  }
+  return `${promptTitle} — Batch — ${date}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -70,7 +73,7 @@ export default function BatchRunModal({
   open,
   onClose,
   prompt,
-  selectedModel,
+  selectedModels = [],
 }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -78,12 +81,25 @@ export default function BatchRunModal({
 
   const [chunkSize, setChunkSize] = useState(10);
   const [chunkSizeError, setChunkSizeError] = useState("");
-  const [overrideJson, setOverrideJson] = useState(null); // replaces saved JSON for this run
+  const [overrideJson, setOverrideJson] = useState(null);
   const [phase, setPhase] = useState("idle");
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
   const [streamPreview, setStreamPreview] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [savedTitle, setSavedTitle] = useState("");
+  const [modelWarnings, setModelWarnings] = useState([]);
+  const [modelNamesMap, setModelNamesMap] = useState({});
+
+  useEffect(() => {
+    fetch("/api/ai/models")
+      .then((r) => r.json())
+      .then((data) => {
+        const map = {};
+        data.forEach((m) => { map[m.id] = m.name; });
+        setModelNamesMap(map);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -95,17 +111,16 @@ export default function BatchRunModal({
       setStreamPreview("");
       setErrorMsg("");
       setSavedTitle("");
+      setModelWarnings([]);
     }
   }, [open]);
 
-  // The JSON source: override takes priority over the saved attachment
   const savedJson =
     prompt?.attachments?.find(
       (a) => a.name.endsWith(".json") || a.mime_type === "application/json",
     ) ?? null;
   const activeJson = overrideJson ?? savedJson;
 
-  // Context-only attachments (non-JSON) sent with every chunk
   const contextAttachments =
     prompt?.attachments?.filter((a) => a !== savedJson) ?? [];
 
@@ -144,6 +159,12 @@ export default function BatchRunModal({
       return;
     }
 
+    if (selectedModels.length === 0) {
+      setErrorMsg("No model selected. Select at least one model in the header.");
+      setPhase("error");
+      return;
+    }
+
     let stocksList;
     try {
       stocksList = extractList(activeJson.content);
@@ -154,88 +175,120 @@ export default function BatchRunModal({
     }
 
     const chunks = chunkArray(stocksList, size);
-    const total = chunks.length;
+    const totalChunks = chunks.length;
+    const totalModels = selectedModels.length;
     setPhase("running");
-    setProgress({ current: 0, total, label: "Starting…" });
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const collectedTables = [];
 
-    try {
-      for (let i = 0; i < chunks.length; i++) {
+    const modelResultsMap = {};
+    const warnings = [];
+    let sharedColumns = null;
+
+    for (let mi = 0; mi < selectedModels.length; mi++) {
+      if (controller.signal.aborted) break;
+
+      const modelId = selectedModels[mi];
+      const modelName = modelNamesMap[modelId] ?? modelId;
+      const collectedTables = [];
+
+      try {
+        for (let i = 0; i < chunks.length; i++) {
+          if (controller.signal.aborted) break;
+
+          const chunkItems = chunks[i];
+          setProgress({
+            current: i + 1,
+            total: totalChunks,
+            label:
+              totalModels > 1
+                ? `Model ${mi + 1}/${totalModels}: ${modelName} — Chunk ${i + 1}/${totalChunks} (${chunkItems.length} items)`
+                : `Chunk ${i + 1} of ${totalChunks} (${chunkItems.length} items)`,
+          });
+          setStreamPreview("");
+
+          const chunkAttachment = {
+            name: `chunk_${i + 1}.json`,
+            content: JSON.stringify(chunkItems, null, 2),
+            mime_type: "application/json",
+          };
+
+          const fullText = await streamChat({
+            model: modelId,
+            messages: [{ role: "user", content: injectCurrentDate(prompt.text) }],
+            attachments: [...contextAttachments, chunkAttachment],
+            signal: controller.signal,
+            onToken: (token) =>
+              setStreamPreview((prev) => {
+                const next = prev + token;
+                return next.length > 600 ? next.slice(-600) : next;
+              }),
+          });
+
+          const table = parseMarkdownTable(fullText);
+          if (table) collectedTables.push(table);
+        }
+
         if (controller.signal.aborted) break;
 
-        const chunkItems = chunks[i];
-        setProgress({
-          current: i + 1,
-          total,
-          label: `Chunk ${i + 1} of ${total} (${chunkItems.length} items)`,
-        });
-        setStreamPreview("");
-
-        const chunkAttachment = {
-          name: `chunk_${i + 1}.json`,
-          content: JSON.stringify(chunkItems, null, 2),
-          mime_type: "application/json",
-        };
-
-        const fullText = await streamChat({
-          model: selectedModel,
-          messages: [{ role: "user", content: injectCurrentDate(prompt.text) }],
-          attachments: [...contextAttachments, chunkAttachment],
-          signal: controller.signal,
-          onToken: (token) =>
-            setStreamPreview((prev) => {
-              const next = prev + token;
-              return next.length > 600 ? next.slice(-600) : next;
-            }),
-        });
-
-        const table = parseMarkdownTable(fullText);
-        if (table) collectedTables.push(table);
+        const merged = mergeTables(collectedTables);
+        if (merged) {
+          if (!sharedColumns) sharedColumns = merged.columns;
+          modelResultsMap[modelId] = { name: modelName, rows: merged.rows };
+        } else {
+          warnings.push(`${modelName}: no table found in responses`);
+          modelResultsMap[modelId] = { name: modelName, rows: [] };
+        }
+      } catch (err) {
+        if (err.name === "AbortError") break;
+        warnings.push(`${modelName}: ${err.message}`);
+        modelResultsMap[modelId] = { name: modelName, rows: [], error: err.message };
       }
+    }
 
-      if (controller.signal.aborted) {
-        setPhase("idle");
-        return;
-      }
+    if (controller.signal.aborted) {
+      setPhase("idle");
+      return;
+    }
 
-      const merged = mergeTables(collectedTables);
-      if (!merged) {
-        setErrorMsg(
-          "No tables were found in any AI response. Make sure your prompt produces a table with the correct markers.",
-        );
-        setPhase("error");
-        return;
-      }
+    if (!sharedColumns) {
+      setErrorMsg(
+        "No tables were found in any AI response. Make sure your prompt produces a table with the correct markers.",
+      );
+      setPhase("error");
+      return;
+    }
 
-      const title = deriveReportTitle(prompt.title, selectedModel);
+    const firstModelId = selectedModels[0];
+    const firstRows = modelResultsMap[firstModelId]?.rows ?? [];
+
+    const title = deriveReportTitle(prompt.title, selectedModels);
+    try {
       const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          columns: merged.columns,
-          rows: merged.rows,
+          columns: sharedColumns,
+          rows: firstRows,
           source_prompt_title: prompt.title,
+          model_results: Object.keys(modelResultsMap).length > 0 ? modelResultsMap : null,
         }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? "Failed to save report");
       }
-
-      setSavedTitle(title);
-      setPhase("done");
     } catch (err) {
-      if (err.name === "AbortError") {
-        setPhase("idle");
-        return;
-      }
       setErrorMsg(err.message);
       setPhase("error");
+      return;
     }
+
+    setSavedTitle(title);
+    setModelWarnings(warnings);
+    setPhase("done");
   }
 
   const progressPct =
@@ -325,6 +378,27 @@ export default function BatchRunModal({
                 )}
               </Box>
 
+              {/* Models summary */}
+              {selectedModels.length > 0 && (
+                <Box>
+                  <Typography
+                    level="body-xs"
+                    fontWeight="md"
+                    textColor="neutral.500"
+                    sx={{ mb: 0.75 }}
+                  >
+                    MODELS ({selectedModels.length})
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {selectedModels.map((id) => (
+                      <Chip key={id} size="sm" variant="soft" color="primary">
+                        {modelNamesMap[id] ?? id}
+                      </Chip>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
               {/* Chunk size */}
               <FormControl error={!!chunkSizeError}>
                 <FormLabel>Chunk size</FormLabel>
@@ -403,6 +477,15 @@ export default function BatchRunModal({
               <Typography level="body-sm" textColor="neutral.500">
                 "{savedTitle}"
               </Typography>
+              {modelWarnings.length > 0 && (
+                <Box sx={{ mt: 0.5 }}>
+                  {modelWarnings.map((w, i) => (
+                    <Typography key={i} level="body-xs" color="warning">
+                      ⚠ {w}
+                    </Typography>
+                  ))}
+                </Box>
+              )}
             </Box>
           )}
 
@@ -420,7 +503,7 @@ export default function BatchRunModal({
               <Button variant="plain" color="neutral" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={handleStart} disabled={!activeJson}>
+              <Button onClick={handleStart} disabled={!activeJson || selectedModels.length === 0}>
                 Start Batch
               </Button>
             </>

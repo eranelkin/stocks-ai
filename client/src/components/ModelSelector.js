@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import Select from '@mui/joy/Select';
+import Box from '@mui/joy/Box';
+import Chip from '@mui/joy/Chip';
 import Option from '@mui/joy/Option';
+import Select from '@mui/joy/Select';
 import Tooltip from '@mui/joy/Tooltip';
 
-function ModelSelector({ value, onChange, refreshTrigger = 0 }) {
+function ModelSelector({ value = [], onChange, refreshTrigger = 0 }) {
   const [models, setModels] = useState([]);
 
   useEffect(() => {
@@ -11,11 +13,14 @@ function ModelSelector({ value, onChange, refreshTrigger = 0 }) {
       .then((r) => r.json())
       .then((data) => {
         setModels(data);
-        if (!value) {
-          const saved = localStorage.getItem('selectedModel');
-          const match = saved && data.find((m) => m.id === saved);
-          const def = match || data.find((m) => m.default) || data[0];
-          if (def) onChange(def.id);
+        if (value.length === 0) {
+          try {
+            const saved = JSON.parse(localStorage.getItem('selectedModels') || '[]');
+            const valid = saved.filter((id) => data.some((m) => m.id === id && m.ready));
+            if (valid.length > 0) { onChange(valid); return; }
+          } catch {}
+          const def = data.find((m) => m.default && m.ready) || data.find((m) => m.ready);
+          if (def) onChange([def.id]);
         }
       })
       .catch(() => {});
@@ -25,20 +30,26 @@ function ModelSelector({ value, onChange, refreshTrigger = 0 }) {
 
   return (
     <Select
+      multiple
       size="sm"
-      value={value ?? ''}
+      value={value}
       onChange={(_, v) => onChange(v)}
+      placeholder="Select model…"
+      renderValue={(selected) => (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {selected.map((opt) => (
+            <Chip key={opt.value} size="sm" variant="soft" color="primary">
+              {opt.label}
+            </Chip>
+          ))}
+        </Box>
+      )}
       sx={{ minWidth: 160 }}
     >
       {models.map((m) => (
-        <Tooltip
-          key={m.id}
-          title={m.ready ? '' : 'API key not configured'}
-          placement="left"
-        >
+        <Tooltip key={m.id} title={m.ready ? '' : 'API key not configured'} placement="left">
           <Option value={m.id} disabled={!m.ready}>
-            {m.name}
-            {!m.ready && ' ⚠'}
+            {m.name}{!m.ready && ' ⚠'}
           </Option>
         </Tooltip>
       ))}

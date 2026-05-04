@@ -261,7 +261,7 @@ function PromptModal({ open, onClose, onSave, initial, saving }) {
 
 // ─── Shared prompts panel (used by both tabs) ─────────────────────────────────
 
-function PromptsPanel({ category, showBatch, selectedModel }) {
+function PromptsPanel({ category, showBatch, selectedModels = [] }) {
   const navigate = useNavigate();
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -497,7 +497,7 @@ function PromptsPanel({ category, showBatch, selectedModel }) {
           open={!!batchPrompt}
           onClose={() => setBatchPrompt(null)}
           prompt={batchPrompt}
-          selectedModel={selectedModel}
+          selectedModels={selectedModels}
         />
       )}
     </>
@@ -506,7 +506,7 @@ function PromptsPanel({ category, showBatch, selectedModel }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-function PromptsPage({ selectedModel }) {
+function PromptsPage({ selectedModels }) {
   return (
     <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
       <Box sx={{ mb: 3 }}>
@@ -526,7 +526,7 @@ function PromptsPage({ selectedModel }) {
           <PromptsPanel
             category="personal"
             showBatch
-            selectedModel={selectedModel}
+            selectedModels={selectedModels}
           />
         </TabPanel>
 

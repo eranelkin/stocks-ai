@@ -55,13 +55,17 @@ function NavTab({ to, children }) {
 }
 
 function App() {
-  const [selectedModel, setSelectedModel] = useState(
-    () => localStorage.getItem('selectedModel') || ''
-  );
+  const [selectedModels, setSelectedModels] = useState(() => {
+    try {
+      const saved = localStorage.getItem('selectedModels');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
 
-  const handleModelChange = (model) => {
-    setSelectedModel(model);
-    localStorage.setItem('selectedModel', model);
+  const handleModelChange = (models) => {
+    setSelectedModels(models);
+    localStorage.setItem('selectedModels', JSON.stringify(models));
   };
   const [chatKey, setChatKey] = useState(0);
   const [modelsVersion, setModelsVersion] = useState(0);
@@ -105,7 +109,7 @@ function App() {
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ModelSelector value={selectedModel} onChange={handleModelChange} refreshTrigger={modelsVersion} />
+            <ModelSelector value={selectedModels} onChange={handleModelChange} refreshTrigger={modelsVersion} />
             <ServerStatus />
             <Tooltip title="Clear chat" placement="bottom">
               <IconButton
@@ -126,11 +130,11 @@ function App() {
           <Route path="/" element={<Navigate to="/prompts" replace />} />
           <Route
             path="/chat"
-            element={<ChatWindow key={chatKey} selectedModel={selectedModel} />}
+            element={<ChatWindow key={chatKey} selectedModels={selectedModels} />}
           />
-          <Route path="/prompts" element={<PromptsPage selectedModel={selectedModel} />} />
+          <Route path="/prompts" element={<PromptsPage selectedModels={selectedModels} />} />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/market" element={<MarketPage selectedModel={selectedModel} />} />
+          <Route path="/market" element={<MarketPage selectedModels={selectedModels} />} />
           <Route path="/models" element={<ModelsPage onModelsChanged={() => setModelsVersion((v) => v + 1)} />} />
         </Routes>
       </Box>

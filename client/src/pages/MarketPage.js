@@ -949,7 +949,8 @@ function PredictionSection({ title, text, loading, streaming, error, cachedTs })
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-function MarketPage({ selectedModel }) {
+function MarketPage({ selectedModels }) {
+  const selectedModel = selectedModels?.[0] ?? '';
   // ── Fear & Greed state ──
   const [fgData, setFgData] = useState(SESSION_CACHE.feargreed.data);
   const [fgLoading, setFgLoading] = useState(!isFresh(SESSION_CACHE.feargreed.ts));

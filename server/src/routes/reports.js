@@ -8,6 +8,7 @@ function parseReport(row) {
     ...row,
     columns: JSON.parse(row.columns),
     rows: JSON.parse(row.rows),
+    model_results: row.model_results ? JSON.parse(row.model_results) : null,
   };
 }
 
@@ -26,15 +27,21 @@ router.get('/:id', (req, res) => {
 
 // POST /api/reports
 router.post('/', (req, res) => {
-  const { title, columns, rows, source_prompt_title = null } = req.body;
+  const { title, columns, rows, source_prompt_title = null, model_results = null } = req.body;
   if (!title?.trim())              return res.status(400).json({ error: 'title is required' });
   if (!Array.isArray(columns) || columns.length === 0)
                                    return res.status(400).json({ error: 'columns must be a non-empty array' });
   if (!Array.isArray(rows))        return res.status(400).json({ error: 'rows must be an array' });
 
   const result = db
-    .prepare('INSERT INTO reports (title, columns, rows, source_prompt_title) VALUES (?, ?, ?, ?)')
-    .run(title.trim(), JSON.stringify(columns), JSON.stringify(rows), source_prompt_title ?? null);
+    .prepare('INSERT INTO reports (title, columns, rows, source_prompt_title, model_results) VALUES (?, ?, ?, ?, ?)')
+    .run(
+      title.trim(),
+      JSON.stringify(columns),
+      JSON.stringify(rows),
+      source_prompt_title ?? null,
+      model_results ? JSON.stringify(model_results) : null,
+    );
 
   const row = db.prepare('SELECT * FROM reports WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(parseReport(row));

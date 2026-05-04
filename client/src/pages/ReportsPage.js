@@ -260,7 +260,28 @@ function DetailPanel({ report, onClose }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
 
+  const modelEntries = report?.model_results
+    ? Object.entries(report.model_results)
+    : [];
+  const isMultiModel = modelEntries.length >= 2;
+
+  const [activeModelId, setActiveModelId] = useState(
+    () => modelEntries[0]?.[0] ?? null,
+  );
+
+  useEffect(() => {
+    if (!report) return;
+    const entries = report.model_results ? Object.entries(report.model_results) : [];
+    setActiveModelId(entries[0]?.[0] ?? null);
+    setSortCol(null);
+    setSortDir("asc");
+  }, [report?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!report) return null;
+
+  const activeRows = isMultiModel
+    ? (report.model_results[activeModelId]?.rows ?? [])
+    : report.rows;
 
   const handleSort = (col) => {
     const key = col.toLowerCase();
@@ -273,11 +294,11 @@ function DetailPanel({ report, onClose }) {
   };
 
   const sortedRows = (() => {
-    if (!sortCol) return report.rows;
+    if (!sortCol) return activeRows;
     const colIdx = report.columns.findIndex((c) => c.toLowerCase() === sortCol);
-    if (colIdx === -1) return report.rows;
+    if (colIdx === -1) return activeRows;
     const type = SORTABLE_COLS[sortCol];
-    return [...report.rows].sort((a, b) => {
+    return [...activeRows].sort((a, b) => {
       const av = a[colIdx] ?? "";
       const bv = b[colIdx] ?? "";
       const cmp =
@@ -301,6 +322,7 @@ function DetailPanel({ report, onClose }) {
         minHeight: 0,
       }}
     >
+      {/* Title bar */}
       <Box
         sx={{
           px: 2,
@@ -339,6 +361,41 @@ function DetailPanel({ report, onClose }) {
         </Box>
       </Box>
 
+      {/* Model tabs — only for multi-model reports */}
+      {isMultiModel && (
+        <Box
+          sx={{
+            px: 2,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            flexShrink: 0,
+            bgcolor: "background.surface",
+          }}
+        >
+          <Tabs
+            value={activeModelId}
+            onChange={(_, v) => {
+              setActiveModelId(v);
+              setSortCol(null);
+              setSortDir("asc");
+            }}
+            sx={{ bgcolor: "transparent" }}
+          >
+            <TabList size="sm">
+              {modelEntries.map(([id, { name, rows }]) => (
+                <Tab key={id} value={id}>
+                  {name}
+                  <Chip size="sm" variant="soft" color="neutral" sx={{ ml: 0.75 }}>
+                    {rows.length}
+                  </Chip>
+                </Tab>
+              ))}
+            </TabList>
+          </Tabs>
+        </Box>
+      )}
+
+      {/* Table */}
       <Box sx={{ overflow: "auto", flex: 1 }}>
         <Table
           hoverRow
