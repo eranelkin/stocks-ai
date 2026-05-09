@@ -267,6 +267,12 @@ function findProbColIdx(columns) {
   return -1;
 }
 
+function findProbColName(columns) {
+  if (!columns) return null;
+  const idx = findProbColIdx(columns);
+  return idx !== -1 ? columns[idx].toLowerCase() : null;
+}
+
 function findSymbolColIdx(columns) {
   return columns.findIndex((c) => c.toLowerCase() === "symbol");
 }
@@ -427,8 +433,8 @@ function JudgeTable({ report }) {
 }
 
 function DetailPanel({ report, onClose }) {
-  const [sortCol, setSortCol] = useState(null);
-  const [sortDir, setSortDir] = useState("asc");
+  const [sortCol, setSortCol] = useState(() => findProbColName(report?.columns));
+  const [sortDir, setSortDir] = useState("desc");
 
   const modelEntries = report?.model_results
     ? Object.entries(report.model_results)
@@ -443,8 +449,8 @@ function DetailPanel({ report, onClose }) {
     if (!report) return;
     const entries = report.model_results ? Object.entries(report.model_results) : [];
     setActiveModelId(entries[0]?.[0] ?? null);
-    setSortCol(null);
-    setSortDir("asc");
+    setSortCol(findProbColName(report.columns));
+    setSortDir("desc");
   }, [report?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!report) return null;
@@ -546,8 +552,8 @@ function DetailPanel({ report, onClose }) {
             value={activeModelId}
             onChange={(_, v) => {
               setActiveModelId(v);
-              setSortCol(null);
-              setSortDir("asc");
+              setSortCol(findProbColName(report.columns));
+              setSortDir("desc");
             }}
             sx={{ bgcolor: "transparent" }}
           >
