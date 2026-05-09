@@ -1,18 +1,18 @@
-import { useState } from 'react';
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { CssVarsProvider, useColorScheme } from '@mui/joy/styles';
-import CssBaseline from '@mui/joy/CssBaseline';
-import Box from '@mui/joy/Box';
-import IconButton from '@mui/joy/IconButton';
-import Tooltip from '@mui/joy/Tooltip';
-import Typography from '@mui/joy/Typography';
-import ChatWindow from './components/ChatWindow';
-import ModelSelector from './components/ModelSelector';
-import ServerStatus from './components/ServerStatus';
-import MarketPage from './pages/MarketPage';
-import ModelsPage from './pages/ModelsPage';
-import PromptsPage from './pages/PromptsPage';
-import ReportsPage from './pages/ReportsPage';
+import { useState } from "react";
+import { Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { CssVarsProvider, useColorScheme } from "@mui/joy/styles";
+import CssBaseline from "@mui/joy/CssBaseline";
+import Box from "@mui/joy/Box";
+import IconButton from "@mui/joy/IconButton";
+import Tooltip from "@mui/joy/Tooltip";
+import Typography from "@mui/joy/Typography";
+import ChatWindow from "./components/ChatWindow";
+import ModelSelector from "./components/ModelSelector";
+import ServerStatus from "./components/ServerStatus";
+import MarketPage from "./pages/MarketPage";
+import ModelsPage from "./pages/ModelsPage";
+import PromptsPage from "./pages/PromptsPage";
+import ReportsPage from "./pages/ReportsPage";
 
 function DarkModeToggle() {
   const { mode, setMode } = useColorScheme();
@@ -21,30 +21,30 @@ function DarkModeToggle() {
       size="sm"
       variant="plain"
       color="neutral"
-      onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
+      onClick={() => setMode(mode === "dark" ? "light" : "dark")}
       title="Toggle dark mode"
     >
-      {mode === 'dark' ? <SunIcon /> : <MoonIcon />}
+      {mode === "dark" ? <SunIcon /> : <MoonIcon />}
     </IconButton>
   );
 }
 
 function NavTab({ to, children }) {
   return (
-    <NavLink to={to} style={{ textDecoration: 'none' }}>
+    <NavLink to={to} style={{ textDecoration: "none" }}>
       {({ isActive }) => (
         <Box
           sx={{
             px: 1.5,
             py: 0.5,
-            borderRadius: 'sm',
-            cursor: 'pointer',
-            fontSize: 'sm',
-            fontWeight: isActive ? 'lg' : 'md',
-            color: isActive ? 'primary.plainColor' : 'text.secondary',
-            bgcolor: isActive ? 'primary.softBg' : 'transparent',
-            '&:hover': { bgcolor: 'neutral.softBg' },
-            transition: 'background 0.15s',
+            borderRadius: "sm",
+            cursor: "pointer",
+            fontSize: "sm",
+            fontWeight: isActive ? "lg" : "md",
+            color: isActive ? "primary.plainColor" : "text.secondary",
+            bgcolor: isActive ? "primary.softBg" : "transparent",
+            "&:hover": { bgcolor: "neutral.softBg" },
+            transition: "background 0.15s",
           }}
         >
           {children}
@@ -57,7 +57,7 @@ function NavTab({ to, children }) {
 function App() {
   const [selectedModels, setSelectedModels] = useState(() => {
     try {
-      const saved = localStorage.getItem('selectedModels');
+      const saved = localStorage.getItem("selectedModels");
       if (saved) return JSON.parse(saved);
     } catch {}
     return [];
@@ -65,7 +65,7 @@ function App() {
 
   const handleModelChange = (models) => {
     setSelectedModels(models);
-    localStorage.setItem('selectedModels', JSON.stringify(models));
+    localStorage.setItem("selectedModels", JSON.stringify(models));
   };
   const [chatKey, setChatKey] = useState(0);
   const [modelsVersion, setModelsVersion] = useState(0);
@@ -75,31 +75,31 @@ function App() {
       <CssBaseline />
       <Box
         sx={{
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          bgcolor: 'background.body',
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "background.body",
         }}
       >
         {/* Header */}
         <Box
           sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
             px: 2.5,
             py: 1.25,
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'background.surface',
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.surface",
             flexShrink: 0,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Typography level="title-md" fontWeight="lg">
               Stocks AI
             </Typography>
-            <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Box sx={{ display: "flex", gap: 0.5 }}>
               <NavTab to="/chat">Chat</NavTab>
               <NavTab to="/prompts">Prompts</NavTab>
               <NavTab to="/reports">Reports</NavTab>
@@ -108,8 +108,12 @@ function App() {
             </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ModelSelector value={selectedModels} onChange={handleModelChange} refreshTrigger={modelsVersion} />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <ModelSelector
+              value={selectedModels}
+              onChange={handleModelChange}
+              refreshTrigger={modelsVersion}
+            />
             <ServerStatus />
             <Tooltip title="Clear chat" placement="bottom">
               <IconButton
@@ -130,12 +134,27 @@ function App() {
           <Route path="/" element={<Navigate to="/prompts" replace />} />
           <Route
             path="/chat"
-            element={<ChatWindow key={chatKey} selectedModels={selectedModels} />}
+            element={
+              <ChatWindow key={chatKey} selectedModels={selectedModels} />
+            }
           />
-          <Route path="/prompts" element={<PromptsPage selectedModels={selectedModels} />} />
+          <Route
+            path="/prompts"
+            element={<PromptsPage selectedModels={selectedModels} />}
+          />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/market" element={<MarketPage selectedModels={selectedModels} />} />
-          <Route path="/models" element={<ModelsPage onModelsChanged={() => setModelsVersion((v) => v + 1)} />} />
+          <Route
+            path="/market"
+            element={<MarketPage selectedModels={selectedModels} />}
+          />
+          <Route
+            path="/models"
+            element={
+              <ModelsPage
+                onModelsChanged={() => setModelsVersion((v) => v + 1)}
+              />
+            }
+          />
         </Routes>
       </Box>
     </CssVarsProvider>
@@ -144,7 +163,16 @@ function App() {
 
 function ClearIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />

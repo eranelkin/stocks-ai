@@ -256,6 +256,176 @@ const SORTABLE_COLS = {
   "success probability": "number",
 };
 
+// ─── Judge helpers ────────────────────────────────────────────────────────────
+
+function findProbColIdx(columns) {
+  const keys = ["success probability", "probability", "confidence"];
+  for (const key of keys) {
+    const idx = columns.findIndex((c) => c.toLowerCase().includes(key));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function findSymbolColIdx(columns) {
+  return columns.findIndex((c) => c.toLowerCase() === "symbol");
+}
+
+function computeJudgeRows(report) {
+  const modelEntries = Object.entries(report.model_results);
+  const probIdx = findProbColIdx(report.columns);
+  const symIdx = findSymbolColIdx(report.columns);
+  if (probIdx === -1 || symIdx === -1)
+    return { error: "No probability or symbol column detected." };
+
+  const modelTopRows = modelEntries.map(([id, { name, rows }]) => {
+    const sorted = [...rows].sort(
+      (a, b) => (parseFloat(b[probIdx]) || 0) - (parseFloat(a[probIdx]) || 0),
+    );
+    return { id, name, top: sorted.slice(0, 10) };
+  });
+
+  const symbolMap = {};
+  for (const { id, name, top } of modelTopRows) {
+    top.forEach((row, i) => {
+      const sym = (row[symIdx] ?? "").trim();
+      if (!sym) return;
+      const prob = parseFloat(row[probIdx]) || 0;
+      if (!symbolMap[sym]) symbolMap[sym] = [];
+      symbolMap[sym].push({ modelId: id, modelName: name, rank: i + 1, prob });
+    });
+  }
+
+  const judgeRows = Object.entries(symbolMap).map(([sym, appearances]) => {
+    const count = appearances.length;
+    const avgProb = appearances.reduce((s, a) => s + a.prob, 0) / count;
+    const avgRank = appearances.reduce((s, a) => s + a.rank, 0) / count;
+    // Primary: more models is better; secondary: higher avg prob; tertiary: lower avg rank
+    const score = count * 10000 + avgProb * 100 + (11 - avgRank);
+    return { sym, count, avgProb, avgRank, appearances, score };
+  });
+
+  judgeRows.sort((a, b) => b.score - a.score);
+  return { rows: judgeRows.slice(0, 10), modelEntries };
+}
+
+function JudgeTable({ report }) {
+  const result = computeJudgeRows(report);
+  const modelEntries = Object.entries(report.model_results);
+
+  if (result.error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography level="body-sm" textColor="neutral.500">
+          {result.error}
+        </Typography>
+      </Box>
+    );
+  }
+
+  const { rows } = result;
+
+  if (rows.length === 0) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography level="body-sm" textColor="neutral.500">
+          No symbols found in top 10 of any model.
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ overflow: "auto", flex: 1 }}>
+      <Table
+        hoverRow
+        stickyHeader
+        sx={{
+          minWidth: "max-content",
+          "& th": {
+            bgcolor: "background.surface",
+            whiteSpace: "nowrap",
+            minWidth: 120,
+          },
+          "& td": { whiteSpace: "nowrap", minWidth: 120 },
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={{ minWidth: 50, width: 50 }}>#</th>
+            <th style={{ minWidth: 100 }}>Symbol</th>
+            <th style={{ minWidth: 110 }}>Models</th>
+            <th style={{ minWidth: 150 }}>Avg Probability</th>
+            <th style={{ minWidth: 110 }}>Avg Rank</th>
+            {modelEntries.map(([id, { name }]) => (
+              <th key={id} style={{ minWidth: 190 }}>
+                {name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={row.sym}>
+              <td>
+                <Typography level="body-sm" textColor="neutral.500">
+                  {i + 1}
+                </Typography>
+              </td>
+              <td>
+                <Typography level="body-sm" fontWeight="lg">
+                  {row.sym}
+                </Typography>
+              </td>
+              <td>
+                <Chip
+                  size="sm"
+                  variant="soft"
+                  color={
+                    row.count === modelEntries.length
+                      ? "success"
+                      : row.count > 1
+                        ? "warning"
+                        : "neutral"
+                  }
+                >
+                  {row.count}/{modelEntries.length}
+                </Chip>
+              </td>
+              <td>
+                <Typography level="body-sm">
+                  {row.avgProb.toFixed(1)}%
+                </Typography>
+              </td>
+              <td>
+                <Typography level="body-sm">
+                  {row.avgRank.toFixed(1)}
+                </Typography>
+              </td>
+              {modelEntries.map(([id]) => {
+                const app = row.appearances.find((a) => a.modelId === id);
+                return (
+                  <td key={id}>
+                    {app ? (
+                      <Typography level="body-sm">
+                        #{app.rank} · {app.prob}%
+                      </Typography>
+                    ) : (
+                      <Typography level="body-xs" textColor="neutral.400">
+                        —
+                      </Typography>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Box>
+  );
+}
+
 function DetailPanel({ report, onClose }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
@@ -390,71 +560,81 @@ function DetailPanel({ report, onClose }) {
                   </Chip>
                 </Tab>
               ))}
+              <Tab value="judge">
+                Judge
+                <Chip size="sm" variant="soft" color="primary" sx={{ ml: 0.75 }}>
+                  Top 10
+                </Chip>
+              </Tab>
             </TabList>
           </Tabs>
         </Box>
       )}
 
       {/* Table */}
-      <Box sx={{ overflow: "auto", flex: 1 }}>
-        <Table
-          hoverRow
-          stickyHeader
-          sx={{
-            minWidth: "max-content",
-            "& th": {
-              bgcolor: "background.surface",
-              minWidth: 180,
-              whiteSpace: "nowrap",
-            },
-            "& td": {
-              minWidth: 180,
-              whiteSpace: "nowrap",
-            },
-          }}
-        >
-          <thead>
-            <tr>
-              {report.columns.map((col, i) => {
-                const key = col.toLowerCase();
-                const sortable = key in SORTABLE_COLS;
-                const active = sortCol === key;
-                return (
-                  <th
-                    key={i}
-                    style={{
-                      ...getColWidth(col),
-                      cursor: sortable ? "pointer" : "default",
-                      userSelect: "none",
-                    }}
-                    onClick={sortable ? () => handleSort(col) : undefined}
-                  >
-                    {col}
-                    {sortable && (
-                      <span
-                        style={{ marginLeft: 4, opacity: active ? 1 : 0.3 }}
-                      >
-                        {active && sortDir === "desc" ? "↓" : "↑"}
-                      </span>
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRows.map((row, ri) => (
-              <tr key={ri}>
-                {row.map((cell, ci) => (
-                  <td key={ci} style={getColWidth(report.columns[ci])}>
-                    <Typography level="body-sm">{cell}</Typography>
-                  </td>
-                ))}
+      {activeModelId === "judge" ? (
+        <JudgeTable report={report} />
+      ) : (
+        <Box sx={{ overflow: "auto", flex: 1 }}>
+          <Table
+            hoverRow
+            stickyHeader
+            sx={{
+              minWidth: "max-content",
+              "& th": {
+                bgcolor: "background.surface",
+                minWidth: 180,
+                whiteSpace: "nowrap",
+              },
+              "& td": {
+                minWidth: 180,
+                whiteSpace: "nowrap",
+              },
+            }}
+          >
+            <thead>
+              <tr>
+                {report.columns.map((col, i) => {
+                  const key = col.toLowerCase();
+                  const sortable = key in SORTABLE_COLS;
+                  const active = sortCol === key;
+                  return (
+                    <th
+                      key={i}
+                      style={{
+                        ...getColWidth(col),
+                        cursor: sortable ? "pointer" : "default",
+                        userSelect: "none",
+                      }}
+                      onClick={sortable ? () => handleSort(col) : undefined}
+                    >
+                      {col}
+                      {sortable && (
+                        <span
+                          style={{ marginLeft: 4, opacity: active ? 1 : 0.3 }}
+                        >
+                          {active && sortDir === "desc" ? "↓" : "↑"}
+                        </span>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
-            ))}
-          </tbody>
-        </Table>
-      </Box>
+            </thead>
+            <tbody>
+              {sortedRows.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} style={getColWidth(report.columns[ci])}>
+                      <Typography level="body-sm">{cell}</Typography>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Box>
+      )}
     </Sheet>
   );
 }
