@@ -37,4 +37,9 @@ db.exec(`
   )
 `);
 
+// Add model_results column if it doesn't exist yet (migration)
+try {
+  db.exec(`ALTER TABLE reports ADD COLUMN model_results TEXT DEFAULT NULL`);
+} catch {}
+
 module.exports = db;

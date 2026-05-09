@@ -156,7 +156,8 @@ function EmptyState() {
 
 // ─── Main chat window ─────────────────────────────────────────────────────────
 
-function ChatWindow({ selectedModel }) {
+function ChatWindow({ selectedModels }) {
+  const selectedModel = selectedModels?.[0] ?? '';
   const location = useLocation();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -569,7 +570,7 @@ function ChatWindow({ selectedModel }) {
         open={batchOpen}
         onClose={() => setBatchOpen(false)}
         prompt={{ title: 'Chat Batch', text: input || '(see attached files)', attachments }}
-        selectedModel={selectedModel}
+        selectedModels={selectedModels}
       />
     </Box>
   );
