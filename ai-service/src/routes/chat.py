@@ -9,7 +9,7 @@ import openai
 log = logging.getLogger(__name__)
 
 from db.models_db import get_model_with_key
-from services.llm import build_messages, create_stream, iterate_stream
+from services.llm import build_messages, create_stream, iterate_stream, prepare_search_stream
 
 router = APIRouter()
 
@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     messages: list[Message]
     attachments: list[Attachment] = []
     system_prompt: str | None = None
+    enable_web_search: bool = False
 
 
 @router.post("")
@@ -47,7 +48,13 @@ async def chat(req: ChatRequest):
     )
 
     try:
-        stream = await create_stream(req.model, row["api_key"], row["base_url"], full_messages)
+        if req.enable_web_search:
+            generator = await prepare_search_stream(
+                req.model, row["api_key"], row["base_url"], full_messages
+            )
+        else:
+            stream = await create_stream(req.model, row["api_key"], row["base_url"], full_messages)
+            generator = iterate_stream(stream)
     except openai.RateLimitError as e:
         log.warning("Rate limit: %s", e)
         raise HTTPException(status_code=429, detail=str(e))
@@ -61,4 +68,4 @@ async def chat(req: ChatRequest):
         log.error("Unexpected error for model %s: %s", req.model, e)
         raise HTTPException(status_code=500, detail=str(e))
 
-    return StreamingResponse(iterate_stream(stream), media_type="text/event-stream")
+    return StreamingResponse(generator, media_type="text/event-stream")
