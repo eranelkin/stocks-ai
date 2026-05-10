@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
 import Chip from "@mui/joy/Chip";
+import ChipDelete from "@mui/joy/ChipDelete";
 import CircularProgress from "@mui/joy/CircularProgress";
 import DialogActions from "@mui/joy/DialogActions";
 import DialogContent from "@mui/joy/DialogContent";
@@ -168,6 +169,7 @@ function ChatWindow({ selectedModels }) {
   const [promptPickerOpen, setPromptPickerOpen] = useState(false);
   const [reportSaveState, setReportSaveState] = useState({}); // msgIndex → 'idle'|'saving'|'saved'
   const [batchOpen, setBatchOpen] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
   const promptTitleRef = useRef(null);
@@ -332,6 +334,7 @@ function ChatWindow({ selectedModels }) {
             content,
           })),
           attachments,
+          enable_web_search: webSearchEnabled,
         }),
       });
 
@@ -456,21 +459,7 @@ function ChatWindow({ selectedModels }) {
                 variant="soft"
                 color="primary"
                 startDecorator={<FileIcon />}
-                endDecorator={
-                  <Box
-                    component="span"
-                    onClick={() => removeAttachment(a.name)}
-                    sx={{
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      opacity: 0.7,
-                      "&:hover": { opacity: 1 },
-                    }}
-                  >
-                    <CloseIcon />
-                  </Box>
-                }
+                endDecorator={<ChipDelete onClick={() => removeAttachment(a.name)} />}
               >
                 {a.name}
               </Chip>
@@ -521,6 +510,20 @@ function ChatWindow({ selectedModels }) {
               sx={{ mb: 0.25 }}
             >
               <PaperclipIcon />
+            </IconButton>
+          </Tooltip>
+
+          {/* Web search toggle */}
+          <Tooltip title={webSearchEnabled ? "Web search on" : "Web search off"} placement="top">
+            <IconButton
+              size="sm"
+              variant={webSearchEnabled ? "soft" : "plain"}
+              color={webSearchEnabled ? "primary" : "neutral"}
+              onClick={() => setWebSearchEnabled((v) => !v)}
+              disabled={loading}
+              sx={{ mb: 0.25 }}
+            >
+              <GlobeIcon />
             </IconButton>
           </Tooltip>
 
@@ -778,19 +781,22 @@ function FileIcon() {
   );
 }
 
-function CloseIcon() {
+
+function GlobeIcon() {
   return (
     <svg
-      width="10"
-      height="10"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.5"
+      strokeWidth="2"
       strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
     </svg>
   );
 }

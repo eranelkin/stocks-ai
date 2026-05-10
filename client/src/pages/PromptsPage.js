@@ -4,6 +4,7 @@ import BatchRunModal from "../components/BatchRunModal";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
 import Chip from "@mui/joy/Chip";
+import ChipDelete from "@mui/joy/ChipDelete";
 import CircularProgress from "@mui/joy/CircularProgress";
 import DialogActions from "@mui/joy/DialogActions";
 import DialogContent from "@mui/joy/DialogContent";
@@ -128,21 +129,7 @@ function FileAttacher({ attachments, onChange }) {
             variant="soft"
             color="primary"
             startDecorator={<FileIcon />}
-            endDecorator={
-              <Box
-                component="span"
-                onClick={() => remove(a.name)}
-                sx={{
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  opacity: 0.7,
-                  "&:hover": { opacity: 1 },
-                }}
-              >
-                <CloseIcon />
-              </Box>
-            }
+            endDecorator={<ChipDelete onClick={() => remove(a.name)} />}
           >
             {a.name}
           </Chip>
@@ -658,21 +645,5 @@ function FileIcon() {
   );
 }
 
-function CloseIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
 
 export default PromptsPage;

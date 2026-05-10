@@ -4,11 +4,11 @@
  * Calls onToken(chunk) for each streamed token.
  * Pass an AbortSignal via `signal` to cancel mid-stream.
  */
-export async function streamChat({ model, messages, attachments = [], onToken, signal }) {
+export async function streamChat({ model, messages, attachments = [], enableWebSearch = false, onToken, signal }) {
   const res = await fetch('/api/ai/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, attachments }),
+    body: JSON.stringify({ model, messages, attachments, enable_web_search: enableWebSearch }),
     signal,
   });
 

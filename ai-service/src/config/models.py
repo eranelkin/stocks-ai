@@ -20,6 +20,7 @@ MODELS: list[dict] = [
         "provider": "openai_compatible",
         "base_url": "https://api.groq.com/openai/v1",
         "api_key_env": "GROQ_API_KEY",
+        "web_search": True,
         "default": True,
     },
     {
@@ -28,6 +29,7 @@ MODELS: list[dict] = [
         "provider": "openai_compatible",
         "base_url": "https://api.groq.com/openai/v1",
         "api_key_env": "GROQ_API_KEY",
+        "web_search": True,
     },
     # --- Google Gemini (free tier) — get a key at aistudio.google.com ---
     {
@@ -36,6 +38,7 @@ MODELS: list[dict] = [
         "provider": "openai_compatible",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "api_key_env": "GEMINI_API_KEY",
+        "web_search": True,
     },
     {
         "id": "gemini-2.5-flash-lite",
@@ -43,6 +46,7 @@ MODELS: list[dict] = [
         "provider": "openai_compatible",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "api_key_env": "GEMINI_API_KEY",
+        "web_search": True,
     },
 # --- Future models: just uncomment and set the matching env var ---
     # {

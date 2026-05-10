@@ -80,3 +80,50 @@ async def iterate_stream(stream) -> AsyncGenerator[str, None]:
         if delta.content:
             yield f"data: {json.dumps({'content': delta.content})}\n\n"
     yield "data: [DONE]\n\n"
+
+
+async def prepare_search_stream(
+    model_id: str, api_key: str, base_url: str, full_messages: list[dict]
+) -> AsyncGenerator[str, None]:
+    """
+    First call (non-streaming) detects and executes web_search tool calls.
+    Returns an async generator that streams the final answer.
+    Raises OpenAI errors synchronously so the caller can map them to HTTP status codes.
+    """
+    from services.search import WEB_SEARCH_TOOL, execute_tool_calls
+
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    messages = list(full_messages)
+
+    log.info("→ POST %s/chat/completions (search) model=%s", base_url.rstrip('/'), model_id)
+    response = await client.chat.completions.create(
+        model=model_id,
+        messages=messages,
+        tools=[WEB_SEARCH_TOOL],
+        tool_choice="auto",
+        stream=False,
+    )
+
+    choice = response.choices[0]
+
+    if choice.finish_reason != "tool_calls":
+        # Model answered directly without searching — wrap content as SSE generator
+        content = choice.message.content or ""
+
+        async def _direct() -> AsyncGenerator[str, None]:
+            yield f"data: {json.dumps({'content': content})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return _direct()
+
+    # Append assistant message (with tool_calls) then tool results
+    messages.append(choice.message.model_dump(exclude_none=True))
+    messages.extend(execute_tool_calls(choice.message.tool_calls))
+
+    # Second call: stream the final answer with search results in context
+    stream = await client.chat.completions.create(
+        model=model_id,
+        messages=messages,
+        stream=True,
+    )
+    return iterate_stream(stream)
