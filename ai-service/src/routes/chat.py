@@ -1,3 +1,4 @@
+import json
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -41,6 +42,20 @@ async def chat(req: ChatRequest):
     if not row.get("api_key"):
         raise HTTPException(status_code=503, detail=f"API key not configured for model '{req.model}'")
 
+    strategy = row.get("web_search_strategy")
+
+    if req.enable_web_search:
+        ws = row.get("web_search")      # None=unknown, 0=no, 1=yes
+        if ws == 0 or not strategy:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{req.model}' does not support web search. "
+                       f"Run Probe Web Search on the Models page to detect capabilities.",
+            )
+
+    extra_headers = json.loads(row["extra_headers"]) if row.get("extra_headers") else {}
+    extra_params  = json.loads(row["extra_params"])  if row.get("extra_params")  else {}
+
     full_messages = build_messages(
         messages=[m.model_dump() for m in req.messages],
         attachments=[a.model_dump() for a in req.attachments],
@@ -50,10 +65,15 @@ async def chat(req: ChatRequest):
     try:
         if req.enable_web_search:
             generator = await prepare_search_stream(
-                req.model, row["api_key"], row["base_url"], full_messages
+                req.model, row["api_key"], row.get("base_url") or "",
+                full_messages, strategy=strategy,
+                extra_headers=extra_headers, extra_params=extra_params,
             )
         else:
-            stream = await create_stream(req.model, row["api_key"], row["base_url"], full_messages)
+            stream = await create_stream(
+                req.model, row["api_key"], row.get("base_url") or "",
+                full_messages, extra_headers=extra_headers, extra_params=extra_params,
+            )
             generator = iterate_stream(stream)
     except openai.RateLimitError as e:
         log.warning("Rate limit: %s", e)

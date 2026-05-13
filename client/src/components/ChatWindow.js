@@ -170,9 +170,26 @@ function ChatWindow({ selectedModels }) {
   const [reportSaveState, setReportSaveState] = useState({}); // msgIndex → 'idle'|'saving'|'saved'
   const [batchOpen, setBatchOpen] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [modelsData, setModelsData] = useState([]);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
   const promptTitleRef = useRef(null);
+
+  // Fetch model list to know per-model capabilities (e.g. web search support)
+  useEffect(() => {
+    fetch('/api/ai/models')
+      .then(r => r.json())
+      .then(setModelsData)
+      .catch(() => {});
+  }, []);
+
+  const selectedModelObj = modelsData.find(m => m.id === selectedModel);
+  const modelSupportsSearch = selectedModelObj?.web_search === 1;
+
+  // Reset web search toggle when switching to a model that doesn't support it
+  useEffect(() => {
+    if (!modelSupportsSearch) setWebSearchEnabled(false);
+  }, [selectedModel, modelSupportsSearch]);
 
   // Pre-populate from a saved prompt navigated here via the Run button
   useEffect(() => {
@@ -514,13 +531,22 @@ function ChatWindow({ selectedModels }) {
           </Tooltip>
 
           {/* Web search toggle */}
-          <Tooltip title={webSearchEnabled ? "Web search on" : "Web search off"} placement="top">
+          <Tooltip
+            title={
+              !modelSupportsSearch
+                ? "This model doesn't support web search — run Probe on the Models page"
+                : webSearchEnabled
+                ? "Web search on"
+                : "Web search off"
+            }
+            placement="top"
+          >
             <IconButton
               size="sm"
-              variant={webSearchEnabled ? "soft" : "plain"}
-              color={webSearchEnabled ? "primary" : "neutral"}
-              onClick={() => setWebSearchEnabled((v) => !v)}
-              disabled={loading}
+              variant={webSearchEnabled && modelSupportsSearch ? "soft" : "plain"}
+              color={webSearchEnabled && modelSupportsSearch ? "primary" : "neutral"}
+              onClick={() => modelSupportsSearch && setWebSearchEnabled((v) => !v)}
+              disabled={loading || !modelSupportsSearch}
               sx={{ mb: 0.25 }}
             >
               <GlobeIcon />

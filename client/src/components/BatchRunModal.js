@@ -14,6 +14,7 @@ import LinearProgress from "@mui/joy/LinearProgress";
 import Modal from "@mui/joy/Modal";
 import ModalClose from "@mui/joy/ModalClose";
 import ModalDialog from "@mui/joy/ModalDialog";
+import Switch from "@mui/joy/Switch";
 import Typography from "@mui/joy/Typography";
 
 import { parseMarkdownTable } from "../utils/parseMarkdownTable";
@@ -88,15 +89,16 @@ export default function BatchRunModal({
   const [errorMsg, setErrorMsg] = useState("");
   const [savedTitle, setSavedTitle] = useState("");
   const [modelWarnings, setModelWarnings] = useState([]);
-  const [modelNamesMap, setModelNamesMap] = useState({});
+  const [modelsMap, setModelsMap] = useState({});
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   useEffect(() => {
     fetch("/api/ai/models")
       .then((r) => r.json())
       .then((data) => {
         const map = {};
-        data.forEach((m) => { map[m.id] = m.name; });
-        setModelNamesMap(map);
+        data.forEach((m) => { map[m.id] = m; });
+        setModelsMap(map);
       })
       .catch(() => {});
   }, []);
@@ -112,6 +114,7 @@ export default function BatchRunModal({
       setErrorMsg("");
       setSavedTitle("");
       setModelWarnings([]);
+      setWebSearchEnabled(false);
     }
   }, [open]);
 
@@ -190,7 +193,7 @@ export default function BatchRunModal({
       if (controller.signal.aborted) break;
 
       const modelId = selectedModels[mi];
-      const modelName = modelNamesMap[modelId] ?? modelId;
+      const modelName = modelsMap[modelId]?.name ?? modelId;
       const collectedTables = [];
 
       try {
@@ -214,10 +217,12 @@ export default function BatchRunModal({
             mime_type: "application/json",
           };
 
+          const modelSupportsSearch = modelsMap[modelId]?.web_search === 1;
           const fullText = await streamChat({
             model: modelId,
             messages: [{ role: "user", content: injectCurrentDate(prompt.text) }],
             attachments: [...contextAttachments, chunkAttachment],
+            enableWebSearch: webSearchEnabled && modelSupportsSearch,
             signal: controller.signal,
             onToken: (token) =>
               setStreamPreview((prev) => {
@@ -392,10 +397,27 @@ export default function BatchRunModal({
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                     {selectedModels.map((id) => (
                       <Chip key={id} size="sm" variant="soft" color="primary">
-                        {modelNamesMap[id] ?? id}
+                        {modelsMap[id]?.name ?? id}
                       </Chip>
                     ))}
                   </Box>
+                </Box>
+              )}
+
+              {/* Web search toggle — only shown when at least one selected model supports it */}
+              {selectedModels.some((id) => modelsMap[id]?.web_search === 1) && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Switch
+                    size="sm"
+                    checked={webSearchEnabled}
+                    onChange={(e) => setWebSearchEnabled(e.target.checked)}
+                  />
+                  <Typography level="body-sm">Enable web search</Typography>
+                  {webSearchEnabled && selectedModels.some((id) => modelsMap[id]?.web_search !== 1) && (
+                    <Typography level="body-xs" textColor="warning.400">
+                      (skipped for models that don't support it)
+                    </Typography>
+                  )}
                 </Box>
               )}
 

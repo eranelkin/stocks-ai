@@ -182,6 +182,8 @@ function ModelsPage({ onModelsChanged }) {
   const [deleting, setDeleting] = useState(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [probing, setProbing] = useState(false);
+  const [probeResults, setProbeResults] = useState(null);
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
@@ -212,6 +214,23 @@ function ModelsPage({ onModelsChanged }) {
     onModelsChanged?.();
   }
 
+  async function handleProbe() {
+    setProbing(true);
+    setProbeResults(null);
+    try {
+      const res = await fetch('/api/ai/models/probe-web-search', { method: 'POST' });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      setProbeResults(data.results);
+      await fetchModels();
+      onModelsChanged?.();
+    } catch (err) {
+      alert(`Probe failed: ${err.message}`);
+    } finally {
+      setProbing(false);
+    }
+  }
+
   async function handleDelete(id) {
     if (!window.confirm('Delete this model?')) return;
     setDeleting((prev) => new Set(prev).add(id));
@@ -234,10 +253,49 @@ function ModelsPage({ onModelsChanged }) {
             Configure AI providers and API keys. Keys are stored securely and never exposed.
           </Typography>
         </Box>
-        <Button startDecorator={<PlusIcon />} onClick={openAdd} size="sm">
-          Add Model
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            color="neutral"
+            size="sm"
+            loading={probing}
+            onClick={handleProbe}
+            startDecorator={<SearchIcon />}
+          >
+            Probe Web Search
+          </Button>
+          <Button startDecorator={<PlusIcon />} onClick={openAdd} size="sm">
+            Add Model
+          </Button>
+        </Box>
       </Box>
+
+      {probeResults && (
+        <Sheet variant="soft" color="neutral" sx={{ borderRadius: 'md', p: 2, mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography level="body-sm" fontWeight="lg">Probe Results</Typography>
+            <Button size="sm" variant="plain" color="neutral" onClick={() => setProbeResults(null)}>
+              Dismiss
+            </Button>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+            {probeResults.map((r) => (
+              <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Chip size="sm" color={r.success ? 'success' : 'danger'} variant="soft">
+                  {r.success ? 'OK' : 'FAIL'}
+                </Chip>
+                <Typography level="body-xs" fontFamily="monospace">{r.id}</Typography>
+                {r.strategy && (
+                  <Chip size="sm" variant="outlined" color="neutral">{r.strategy}</Chip>
+                )}
+                {r.error && (
+                  <Typography level="body-xs" color="danger">{r.error}</Typography>
+                )}
+              </Box>
+            ))}
+          </Box>
+        </Sheet>
+      )}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -259,6 +317,7 @@ function ModelsPage({ onModelsChanged }) {
                 <th style={{ width: 160 }}>Provider</th>
                 <th>Base URL</th>
                 <th style={{ width: 90 }}>Status</th>
+                <th style={{ width: 110 }}>Search</th>
                 <th style={{ width: 96 }}>Actions</th>
               </tr>
             </thead>
@@ -290,6 +349,19 @@ function ModelsPage({ onModelsChanged }) {
                   <td>
                     <Chip size="sm" variant="soft" color={m.ready ? 'success' : 'warning'}>
                       {m.ready ? 'Ready' : 'No key'}
+                    </Chip>
+                  </td>
+                  <td>
+                    <Chip
+                      size="sm"
+                      variant="soft"
+                      color={m.web_search === 1 ? 'success' : m.web_search === 0 ? 'danger' : 'neutral'}
+                    >
+                      {m.web_search === 1
+                        ? (m.web_search_strategy ?? 'yes')
+                        : m.web_search === 0
+                        ? 'no'
+                        : '?'}
                     </Chip>
                   </td>
                   <td>
@@ -336,6 +408,15 @@ function PlusIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }

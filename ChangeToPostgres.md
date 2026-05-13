@@ -3,6 +3,7 @@
 ## Context
 
 The project currently has **two separate SQLite files**:
+
 - `data/stocks-ai.db` — Node.js server (`prompts`, `reports` tables)
 - `data/ai-service.db` — Python ai-service (`models` table)
 
@@ -22,26 +23,26 @@ Both use raw SQL with no ORM. This plan replaces both with a **single PostgreSQL
 
 ## Files to Create
 
-| File | Purpose |
-|------|---------|
-| `docker-compose.yml` (repo root) | PostgreSQL 16 service with named volume |
-| `db/init.sql` | DDL for all 3 tables in PostgreSQL syntax |
-| `server/.env` | `DATABASE_URL` for the Node server |
-| `migrate.py` *(optional, repo root)* | One-shot SQLite → PG data migration script |
+| File                                 | Purpose                                    |
+| ------------------------------------ | ------------------------------------------ |
+| `docker-compose.yml` (repo root)     | PostgreSQL 16 service with named volume    |
+| `db/init.sql`                        | DDL for all 3 tables in PostgreSQL syntax  |
+| `server/.env`                        | `DATABASE_URL` for the Node server         |
+| `migrate.py` _(optional, repo root)_ | One-shot SQLite → PG data migration script |
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
-| `server/.gitignore` | Add `.env` |
-| `server/package.json` | Add `pg`, `dotenv`; remove `better-sqlite3` |
-| `server/src/db/index.js` | Replace `better-sqlite3` singleton with `pg.Pool` |
-| `server/src/routes/prompts.js` | Sync → async, `?` → `$N`, `RETURNING *`, remove manual JSON parse/stringify |
-| `server/src/routes/reports.js` | Same as prompts.js |
-| `ai-service/.env` | Add `DATABASE_URL` |
-| `ai-service/requirements.txt` | Add `psycopg2-binary` |
-| `ai-service/src/db/models_db.py` | `sqlite3` → `psycopg2`, `%s` placeholders, cursor pattern |
-| `ai-service/src/routes/models.py` | `sqlite3.IntegrityError` → `psycopg2.errors.UniqueViolation` |
+| File                              | Change                                                                      |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `server/.gitignore`               | Add `.env`                                                                  |
+| `server/package.json`             | Add `pg`, `dotenv`; remove `better-sqlite3`                                 |
+| `server/src/db/index.js`          | Replace `better-sqlite3` singleton with `pg.Pool`                           |
+| `server/src/routes/prompts.js`    | Sync → async, `?` → `$N`, `RETURNING *`, remove manual JSON parse/stringify |
+| `server/src/routes/reports.js`    | Same as prompts.js                                                          |
+| `ai-service/.env`                 | Add `DATABASE_URL`                                                          |
+| `ai-service/requirements.txt`     | Add `psycopg2-binary`                                                       |
+| `ai-service/src/db/models_db.py`  | `sqlite3` → `psycopg2`, `%s` placeholders, cursor pattern                   |
+| `ai-service/src/routes/models.py` | `sqlite3.IntegrityError` → `psycopg2.errors.UniqueViolation`                |
 
 ---
 
@@ -113,13 +114,13 @@ CREATE TABLE IF NOT EXISTS models (
 
 **Type translation from SQLite:**
 
-| SQLite | PostgreSQL | Reason |
-|--------|------------|--------|
-| `INTEGER PRIMARY KEY AUTOINCREMENT` | `SERIAL PRIMARY KEY` | PG's auto-increment equivalent |
-| `TEXT NOT NULL DEFAULT '[]'` (JSON) | `JSONB NOT NULL DEFAULT '[]'` | Binary JSON — validated on insert, indexable |
-| `datetime('now')` | `NOW()` | PG timestamp function |
-| `TEXT` (timestamps) | `TIMESTAMPTZ` | Proper timestamp with time zone |
-| `models.id TEXT PRIMARY KEY` | unchanged | IDs are strings (e.g., `"llama-3.3-70b-versatile"`) |
+| SQLite                              | PostgreSQL                    | Reason                                              |
+| ----------------------------------- | ----------------------------- | --------------------------------------------------- |
+| `INTEGER PRIMARY KEY AUTOINCREMENT` | `SERIAL PRIMARY KEY`          | PG's auto-increment equivalent                      |
+| `TEXT NOT NULL DEFAULT '[]'` (JSON) | `JSONB NOT NULL DEFAULT '[]'` | Binary JSON — validated on insert, indexable        |
+| `datetime('now')`                   | `NOW()`                       | PG timestamp function                               |
+| `TEXT` (timestamps)                 | `TIMESTAMPTZ`                 | Proper timestamp with time zone                     |
+| `models.id TEXT PRIMARY KEY`        | unchanged                     | IDs are strings (e.g., `"llama-3.3-70b-versatile"`) |
 
 ---
 
@@ -127,12 +128,14 @@ CREATE TABLE IF NOT EXISTS models (
 
 Both services need `DATABASE_URL`. Add to each:
 
-**`server/.env`** *(create new)*
+**`server/.env`** _(create new)_
+
 ```
 DATABASE_URL=postgresql://stocks_ai:stocks_ai_dev@localhost:5432/stocks_ai
 ```
 
-**`ai-service/.env`** *(append)*
+**`ai-service/.env`** _(append)_
+
 ```
 DATABASE_URL=postgresql://stocks_ai:stocks_ai_dev@localhost:5432/stocks_ai
 ```
@@ -152,14 +155,14 @@ cd server && yarn add pg dotenv && yarn remove better-sqlite3
 ### 5. `server/src/db/index.js` — Replace entirely
 
 ```js
-require('dotenv').config();
-const { Pool } = require('pg');
+require("dotenv").config();
+const { Pool } = require("pg");
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Fail fast on startup if PG is unreachable
-pool.query('SELECT 1').catch((err) => {
-  console.error('PostgreSQL connection failed:', err.message);
+pool.query("SELECT 1").catch((err) => {
+  console.error("PostgreSQL connection failed:", err.message);
   process.exit(1);
 });
 
@@ -186,22 +189,24 @@ Schema creation is removed — `init.sql` owns it now. The singleton `db` become
 // Example: GET all prompts (before → after)
 
 // BEFORE (sync, better-sqlite3)
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM prompts WHERE category = ?').all(category);
+router.get("/", (req, res) => {
+  const rows = db
+    .prepare("SELECT * FROM prompts WHERE category = ?")
+    .all(category);
   res.json(rows.map(parsePrompt));
 });
 
 // AFTER (async, pg)
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM prompts WHERE category = $1 ORDER BY created_at DESC',
+      "SELECT * FROM prompts WHERE category = $1 ORDER BY created_at DESC",
       [category],
     );
-    res.json(rows);   // JSONB already deserialized by pg
+    res.json(rows); // JSONB already deserialized by pg
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: "Database error" });
   }
 });
 ```
@@ -292,7 +297,7 @@ cur.execute(
 "created_at": row["created_at"].isoformat(),   # datetime → "2025-01-01T12:00:00+00:00"
 ```
 
-> **psycopg2 context manager note:** `with psycopg2.connect(...) as conn` manages the *transaction* only (not the connection lifecycle). Always call `conn.commit()` explicitly inside the `with` block for writes.
+> **psycopg2 context manager note:** `with psycopg2.connect(...) as conn` manages the _transaction_ only (not the connection lifecycle). Always call `conn.commit()` explicitly inside the `with` block for writes.
 
 ---
 
@@ -315,16 +320,16 @@ except psycopg2.errors.UniqueViolation:
 
 ## Key Gotchas Reference
 
-| Issue | SQLite | PostgreSQL |
-|-------|--------|------------|
-| Query placeholders | `?` | `$1, $2...` (Node `pg`) / `%s` (Python `psycopg2`) |
-| Insert + fetch back | Two queries via `lastInsertRowid` | One query: `INSERT ... RETURNING *` |
-| Ignore duplicate | `INSERT OR IGNORE` | `INSERT ... ON CONFLICT (id) DO NOTHING` |
-| JSON columns | Manual `JSON.stringify` / `JSON.parse` | Automatic — pass/receive native JS or Python objects |
-| Row ordering | `ORDER BY rowid` | `ORDER BY created_at` |
-| Timestamps | `TEXT` string | `datetime` object → `.isoformat()` |
-| Bulk insert sequences | N/A | Run `setval('prompts_id_seq', MAX(id))` after migration |
-| Exception type (Python) | `sqlite3.IntegrityError` | `psycopg2.errors.UniqueViolation` |
+| Issue                   | SQLite                                 | PostgreSQL                                              |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------- |
+| Query placeholders      | `?`                                    | `$1, $2...` (Node `pg`) / `%s` (Python `psycopg2`)      |
+| Insert + fetch back     | Two queries via `lastInsertRowid`      | One query: `INSERT ... RETURNING *`                     |
+| Ignore duplicate        | `INSERT OR IGNORE`                     | `INSERT ... ON CONFLICT (id) DO NOTHING`                |
+| JSON columns            | Manual `JSON.stringify` / `JSON.parse` | Automatic — pass/receive native JS or Python objects    |
+| Row ordering            | `ORDER BY rowid`                       | `ORDER BY created_at`                                   |
+| Timestamps              | `TEXT` string                          | `datetime` object → `.isoformat()`                      |
+| Bulk insert sequences   | N/A                                    | Run `setval('prompts_id_seq', MAX(id))` after migration |
+| Exception type (Python) | `sqlite3.IntegrityError`               | `psycopg2.errors.UniqueViolation`                       |
 
 ---
 
@@ -430,12 +435,14 @@ curl http://localhost:5007/models          # array of seeded models with ready f
 ```
 
 **UI smoke test (http://localhost:5005):**
+
 - [ ] Prompts tab — create a prompt with an attachment, edit it, delete it
 - [ ] Reports tab — save a report from a chat response, delete it
 - [ ] Models page — models listed, API keys show `ready: true`
 - [ ] Chat tab — send a message, get a streamed response
 
 **Reset the database at any time:**
+
 ```bash
 docker-compose down -v && docker-compose up -d
 # Volume is wiped, init.sql re-runs, ai-service seeds models on next startup
