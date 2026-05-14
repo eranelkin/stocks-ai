@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -9,8 +10,10 @@ import openai
 
 log = logging.getLogger(__name__)
 
+from db.logs_db import insert_log
 from db.models_db import get_model_with_key
 from services.llm import build_messages, create_stream, iterate_stream, prepare_search_stream
+from services.search import get_search_context
 
 router = APIRouter()
 
@@ -62,6 +65,9 @@ async def chat(req: ChatRequest):
         **({"system_prompt": req.system_prompt} if req.system_prompt else {}),
     )
 
+    log_type = "search_chat" if req.enable_web_search else "chat"
+    t0 = time.perf_counter()
+
     try:
         if req.enable_web_search:
             generator = await prepare_search_stream(
@@ -77,15 +83,23 @@ async def chat(req: ChatRequest):
             generator = iterate_stream(stream)
     except openai.RateLimitError as e:
         log.warning("Rate limit: %s", e)
+        insert_log(log_type, req.model, "error", int((time.perf_counter() - t0) * 1000), error_msg=str(e))
         raise HTTPException(status_code=429, detail=str(e))
     except openai.AuthenticationError as e:
         log.warning("Auth error for model %s: %s", req.model, e)
+        insert_log(log_type, req.model, "error", int((time.perf_counter() - t0) * 1000), error_msg=str(e))
         raise HTTPException(status_code=401, detail=str(e))
     except openai.OpenAIError as e:
         log.error("OpenAI error for model %s: %s", req.model, e)
+        insert_log(log_type, req.model, "error", int((time.perf_counter() - t0) * 1000), error_msg=str(e))
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         log.error("Unexpected error for model %s: %s", req.model, e)
+        insert_log(log_type, req.model, "error", int((time.perf_counter() - t0) * 1000), error_msg=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+    duration_ms = int((time.perf_counter() - t0) * 1000)
+    search_query, _ = get_search_context() if req.enable_web_search else (None, None)
+    insert_log(log_type, req.model, "ok", duration_ms, search_query=search_query)
 
     return StreamingResponse(generator, media_type="text/event-stream")

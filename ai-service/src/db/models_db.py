@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS models (
     base_url             TEXT NOT NULL DEFAULT '',
     api_key              TEXT NOT NULL DEFAULT '',
     is_default           INTEGER NOT NULL DEFAULT 0,
+    is_active            INTEGER NOT NULL DEFAULT 1,
     created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     web_search           INTEGER,
     web_search_strategy  TEXT,
@@ -46,6 +47,7 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         "ALTER TABLE models ADD COLUMN web_search_strategy TEXT",
         "ALTER TABLE models ADD COLUMN extra_headers TEXT",
         "ALTER TABLE models ADD COLUMN extra_params TEXT",
+        "ALTER TABLE models ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
     ]
     for sql in migrations:
         try:
@@ -118,10 +120,10 @@ def _reseed_web_search_from_config(conn: sqlite3.Connection) -> None:
 
 
 def list_models() -> list[dict]:
-    """Returns all models WITHOUT api_key. Maps is_default → default for client compat."""
+    """Returns all models WITHOUT api_key. Maps is_default → default, is_active → active."""
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, name, provider, base_url, is_default, created_at, "
+            "SELECT id, name, provider, base_url, is_default, is_active, created_at, "
             "web_search, web_search_strategy FROM models ORDER BY rowid"
         ).fetchall()
     return [
@@ -131,6 +133,7 @@ def list_models() -> list[dict]:
             "provider": r["provider"],
             "base_url": r["base_url"],
             "default": bool(r["is_default"]),
+            "active": bool(r["is_active"]),
             "created_at": r["created_at"],
             "web_search": r["web_search"],
             "web_search_strategy": r["web_search_strategy"],
@@ -193,6 +196,8 @@ def update_model(model_id: str, **kwargs) -> dict | None:
         fields["extra_headers"] = json.dumps(kwargs["extra_headers"])
     if "extra_params" in kwargs and kwargs["extra_params"] is not None:
         fields["extra_params"] = json.dumps(kwargs["extra_params"])
+    if "is_active" in kwargs and kwargs["is_active"] is not None:
+        fields["is_active"] = 1 if kwargs["is_active"] else 0
 
     if not fields:
         return _get_safe(model_id)
@@ -222,7 +227,7 @@ def _get_safe(model_id: str) -> dict:
     """Returns a model row without api_key. Maps is_default → default."""
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id, name, provider, base_url, is_default, created_at, "
+            "SELECT id, name, provider, base_url, is_default, is_active, created_at, "
             "web_search, web_search_strategy, extra_headers, extra_params "
             "FROM models WHERE id = ?",
             (model_id,),
@@ -233,6 +238,7 @@ def _get_safe(model_id: str) -> dict:
         "provider": row["provider"],
         "base_url": row["base_url"],
         "default": bool(row["is_default"]),
+        "active": bool(row["is_active"]),
         "created_at": row["created_at"],
         "web_search": row["web_search"],
         "web_search_strategy": row["web_search_strategy"],

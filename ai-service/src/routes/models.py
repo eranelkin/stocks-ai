@@ -36,6 +36,7 @@ class ModelUpdate(BaseModel):
     base_url: str | None = None
     api_key: str | None = None   # None or empty = keep existing key
     is_default: bool | None = None
+    is_active: bool | None = None
     web_search: int | None = None
     web_search_strategy: str | None = None
     extra_headers: dict | None = None
@@ -95,6 +96,7 @@ async def edit_model(model_id: str, body: ModelUpdate):
         base_url=body.base_url,
         api_key=body.api_key,
         is_default=body.is_default,
+        is_active=body.is_active,
         web_search=body.web_search,
         web_search_strategy=body.web_search_strategy,
         extra_headers=body.extra_headers,
@@ -186,7 +188,7 @@ async def probe_web_search():
     Updates web_search and web_search_strategy in DB. Returns per-model results.
     """
     all_models = list_models()
-    ready = [get_model_with_key(m["id"]) for m in all_models]
+    ready = [get_model_with_key(m["id"]) for m in all_models if m.get("active", True)]
     ready = [r for r in ready if r and r.get("api_key")]
 
     CHUNK_SIZE = 3

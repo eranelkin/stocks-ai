@@ -3,6 +3,7 @@ import Box from '@mui/joy/Box';
 import Button from '@mui/joy/Button';
 import Chip from '@mui/joy/Chip';
 import CircularProgress from '@mui/joy/CircularProgress';
+import Switch from '@mui/joy/Switch';
 import DialogActions from '@mui/joy/DialogActions';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogTitle from '@mui/joy/DialogTitle';
@@ -180,6 +181,7 @@ function ModelsPage({ onModelsChanged }) {
   const [models, setModels]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(new Set());
+  const [toggling, setToggling] = useState(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [probing, setProbing] = useState(false);
@@ -228,6 +230,23 @@ function ModelsPage({ onModelsChanged }) {
       alert(`Probe failed: ${err.message}`);
     } finally {
       setProbing(false);
+    }
+  }
+
+  async function handleToggleActive(id, newActive) {
+    setToggling((prev) => new Set(prev).add(id));
+    try {
+      const res = await fetch(`/api/ai/models/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: newActive }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      const saved = await res.json();
+      setModels((prev) => prev.map((m) => (m.id === saved.id ? saved : m)));
+      onModelsChanged?.();
+    } finally {
+      setToggling((prev) => { const s = new Set(prev); s.delete(id); return s; });
     }
   }
 
@@ -318,6 +337,7 @@ function ModelsPage({ onModelsChanged }) {
                 <th>Base URL</th>
                 <th style={{ width: 90 }}>Status</th>
                 <th style={{ width: 110 }}>Search</th>
+                <th style={{ width: 80 }}>Active</th>
                 <th style={{ width: 96 }}>Actions</th>
               </tr>
             </thead>
@@ -363,6 +383,14 @@ function ModelsPage({ onModelsChanged }) {
                         ? 'no'
                         : '?'}
                     </Chip>
+                  </td>
+                  <td>
+                    <Switch
+                      size="sm"
+                      checked={m.active !== false}
+                      disabled={toggling.has(m.id)}
+                      onChange={(e) => handleToggleActive(m.id, e.target.checked)}
+                    />
                   </td>
                   <td>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>

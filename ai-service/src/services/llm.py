@@ -131,7 +131,7 @@ def _parse_xml_tool_call(error) -> dict | None:
                       if isinstance(body, dict) else str(error))
         if not failed_gen:
             failed_gen = str(error)
-        match = re.search(r"<function=(\w+)\((\{.*?\})\)</function>", failed_gen, re.DOTALL)
+        match = re.search(r"<function=(\w+)[=(]?(\{.*?\})\)?</function>", failed_gen, re.DOTALL)
         if match:
             return {"name": match.group(1), "args": json.loads(match.group(2))}
     except Exception:

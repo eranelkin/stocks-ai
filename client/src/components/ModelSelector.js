@@ -12,14 +12,25 @@ function ModelSelector({ value = [], onChange, refreshTrigger = 0 }) {
     fetch('/api/ai/models')
       .then((r) => r.json())
       .then((data) => {
-        setModels(data);
-        if (value.length === 0) {
+        const active = data.filter((m) => m.active !== false);
+        setModels(active);
+
+        const activeIds = new Set(active.map((m) => m.id));
+        const currentValid = value.filter((id) => activeIds.has(id));
+
+        // Remove any selected models that are no longer active
+        if (currentValid.length !== value.length) {
+          onChange(currentValid);
+        }
+
+        // Auto-select when nothing is selected
+        if (currentValid.length === 0) {
           try {
             const saved = JSON.parse(localStorage.getItem('selectedModels') || '[]');
-            const valid = saved.filter((id) => data.some((m) => m.id === id && m.ready));
+            const valid = saved.filter((id) => active.some((m) => m.id === id && m.ready));
             if (valid.length > 0) { onChange(valid); return; }
           } catch {}
-          const def = data.find((m) => m.default && m.ready) || data.find((m) => m.ready);
+          const def = active.find((m) => m.default && m.ready) || active.find((m) => m.ready);
           if (def) onChange([def.id]);
         }
       })

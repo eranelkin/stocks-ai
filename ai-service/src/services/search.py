@@ -1,8 +1,17 @@
 import json
 import logging
 import os
+import time
+from contextvars import ContextVar
 
 log = logging.getLogger(__name__)
+
+_cv_search_query: ContextVar[str | None] = ContextVar("search_query", default=None)
+_cv_search_ms: ContextVar[int | None] = ContextVar("search_ms", default=None)
+
+
+def get_search_context() -> tuple[str | None, int | None]:
+    return _cv_search_query.get(), _cv_search_ms.get()
 
 GEMINI_SEARCH_TOOL = {"googleSearch": {}}
 
@@ -39,8 +48,11 @@ def web_search(query: str, max_results: int = 5) -> str:
         raise RuntimeError("TAVILY_API_KEY is not set")
 
     log.info("web_search query=%r", query)
+    _cv_search_query.set(query)
     client = TavilyClient(api_key=api_key)
+    t0 = time.perf_counter()
     response = client.search(query=query, max_results=max_results)
+    _cv_search_ms.set(int((time.perf_counter() - t0) * 1000))
     results = response.get("results", [])
     if not results:
         return "No results found."

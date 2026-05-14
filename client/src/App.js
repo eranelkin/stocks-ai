@@ -11,6 +11,7 @@ import ModelSelector from "./components/ModelSelector";
 import ServerStatus from "./components/ServerStatus";
 import MarketPage from "./pages/MarketPage";
 import ModelsPage from "./pages/ModelsPage";
+import MonitorPage from "./pages/MonitorPage";
 import PromptsPage from "./pages/PromptsPage";
 import ReportsPage from "./pages/ReportsPage";
 
@@ -57,15 +58,16 @@ function NavTab({ to, children }) {
 function App() {
   const [selectedModels, setSelectedModels] = useState(() => {
     try {
-      const saved = localStorage.getItem("selectedModels");
-      if (saved) return JSON.parse(saved);
+      const parsed = JSON.parse(localStorage.getItem("selectedModels"));
+      if (Array.isArray(parsed)) return parsed;
     } catch {}
     return [];
   });
 
   const handleModelChange = (models) => {
-    setSelectedModels(models);
-    localStorage.setItem("selectedModels", JSON.stringify(models));
+    const safe = Array.isArray(models) ? models : [];
+    setSelectedModels(safe);
+    localStorage.setItem("selectedModels", JSON.stringify(safe));
   };
   const [chatKey, setChatKey] = useState(0);
   const [modelsVersion, setModelsVersion] = useState(0);
@@ -105,6 +107,7 @@ function App() {
               <NavTab to="/reports">Reports</NavTab>
               <NavTab to="/market">Market</NavTab>
               <NavTab to="/models">Models</NavTab>
+              <NavTab to="/monitor">Monitor</NavTab>
             </Box>
           </Box>
 
@@ -155,6 +158,7 @@ function App() {
               />
             }
           />
+          <Route path="/monitor" element={<MonitorPage />} />
         </Routes>
       </Box>
     </CssVarsProvider>

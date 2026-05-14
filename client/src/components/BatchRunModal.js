@@ -97,7 +97,9 @@ export default function BatchRunModal({
       .then((r) => r.json())
       .then((data) => {
         const map = {};
-        data.forEach((m) => { map[m.id] = m; });
+        data.forEach((m) => {
+          map[m.id] = m;
+        });
         setModelsMap(map);
       })
       .catch(() => {});
@@ -163,7 +165,9 @@ export default function BatchRunModal({
     }
 
     if (selectedModels.length === 0) {
-      setErrorMsg("No model selected. Select at least one model in the header.");
+      setErrorMsg(
+        "No model selected. Select at least one model in the header.",
+      );
       setPhase("error");
       return;
     }
@@ -220,7 +224,9 @@ export default function BatchRunModal({
           const modelSupportsSearch = modelsMap[modelId]?.web_search === 1;
           const fullText = await streamChat({
             model: modelId,
-            messages: [{ role: "user", content: injectCurrentDate(prompt.text) }],
+            messages: [
+              { role: "user", content: injectCurrentDate(prompt.text) },
+            ],
             attachments: [...contextAttachments, chunkAttachment],
             enableWebSearch: webSearchEnabled && modelSupportsSearch,
             signal: controller.signal,
@@ -248,7 +254,11 @@ export default function BatchRunModal({
       } catch (err) {
         if (err.name === "AbortError") break;
         warnings.push(`${modelName}: ${err.message}`);
-        modelResultsMap[modelId] = { name: modelName, rows: [], error: err.message };
+        modelResultsMap[modelId] = {
+          name: modelName,
+          rows: [],
+          error: err.message,
+        };
       }
     }
 
@@ -278,7 +288,8 @@ export default function BatchRunModal({
           columns: sharedColumns,
           rows: firstRows,
           source_prompt_title: prompt.title,
-          model_results: Object.keys(modelResultsMap).length > 0 ? modelResultsMap : null,
+          model_results:
+            Object.keys(modelResultsMap).length > 0 ? modelResultsMap : null,
         }),
       });
       if (!res.ok) {
@@ -384,7 +395,7 @@ export default function BatchRunModal({
               </Box>
 
               {/* Models summary */}
-              {selectedModels.length > 0 && (
+              {selectedModels?.length > 0 && (
                 <Box>
                   <Typography
                     level="body-xs"
@@ -392,7 +403,7 @@ export default function BatchRunModal({
                     textColor="neutral.500"
                     sx={{ mb: 0.75 }}
                   >
-                    MODELS ({selectedModels.length})
+                    MODELS ({selectedModels?.length})
                   </Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                     {selectedModels.map((id) => (
@@ -405,7 +416,9 @@ export default function BatchRunModal({
               )}
 
               {/* Web search toggle — only shown when at least one selected model supports it */}
-              {selectedModels.some((id) => modelsMap[id]?.web_search === 1) && (
+              {selectedModels?.some(
+                (id) => modelsMap[id]?.web_search === 1,
+              ) && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Switch
                     size="sm"
@@ -413,11 +426,14 @@ export default function BatchRunModal({
                     onChange={(e) => setWebSearchEnabled(e.target.checked)}
                   />
                   <Typography level="body-sm">Enable web search</Typography>
-                  {webSearchEnabled && selectedModels.some((id) => modelsMap[id]?.web_search !== 1) && (
-                    <Typography level="body-xs" textColor="warning.400">
-                      (skipped for models that don't support it)
-                    </Typography>
-                  )}
+                  {webSearchEnabled &&
+                    selectedModels.some(
+                      (id) => modelsMap[id]?.web_search !== 1,
+                    ) && (
+                      <Typography level="body-xs" textColor="warning.400">
+                        (skipped for models that don't support it)
+                      </Typography>
+                    )}
                 </Box>
               )}
 
@@ -525,7 +541,10 @@ export default function BatchRunModal({
               <Button variant="plain" color="neutral" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={handleStart} disabled={!activeJson || selectedModels.length === 0}>
+              <Button
+                onClick={handleStart}
+                disabled={!activeJson || selectedModels.length === 0}
+              >
                 Start Batch
               </Button>
             </>
