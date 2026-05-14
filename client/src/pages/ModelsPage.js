@@ -254,7 +254,11 @@ function ModelsPage({ onModelsChanged }) {
     if (!window.confirm('Delete this model?')) return;
     setDeleting((prev) => new Set(prev).add(id));
     try {
-      await fetch(`/api/ai/models/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/ai/models/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail ?? `Delete failed (${res.status})`);
+      }
       setModels((prev) => prev.filter((m) => m.id !== id));
       onModelsChanged?.();
     } finally {

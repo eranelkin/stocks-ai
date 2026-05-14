@@ -87,7 +87,7 @@ async def add_model(body: ModelCreate):
     return _with_ready(row)
 
 
-@router.put("/{model_id}")
+@router.put("/{model_id:path}")
 async def edit_model(model_id: str, body: ModelUpdate):
     row = update_model(
         model_id,
@@ -107,7 +107,7 @@ async def edit_model(model_id: str, body: ModelUpdate):
     return _with_ready(row)
 
 
-@router.delete("/{model_id}", status_code=204)
+@router.delete("/{model_id:path}", status_code=204)
 async def remove_model(model_id: str):
     if not delete_model(model_id):
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")

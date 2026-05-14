@@ -14,6 +14,7 @@ import ModelsPage from "./pages/ModelsPage";
 import MonitorPage from "./pages/MonitorPage";
 import PromptsPage from "./pages/PromptsPage";
 import ReportsPage from "./pages/ReportsPage";
+import WebSearchTestsPage from "./pages/WebSearchTestsPage";
 
 function DarkModeToggle() {
   const { mode, setMode } = useColorScheme();
@@ -103,6 +104,7 @@ function App() {
             </Typography>
             <Box sx={{ display: "flex", gap: 0.5 }}>
               <NavTab to="/chat">Chat</NavTab>
+              <NavTab to="/web-search-tests">Web Search</NavTab>
               <NavTab to="/prompts">Prompts</NavTab>
               <NavTab to="/reports">Reports</NavTab>
               <NavTab to="/market">Market</NavTab>
@@ -159,6 +161,10 @@ function App() {
             }
           />
           <Route path="/monitor" element={<MonitorPage />} />
+          <Route
+            path="/web-search-tests"
+            element={<WebSearchTestsPage selectedModels={selectedModels} />}
+          />
         </Routes>
       </Box>
     </CssVarsProvider>

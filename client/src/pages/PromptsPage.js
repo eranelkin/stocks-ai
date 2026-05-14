@@ -296,6 +296,15 @@ function PromptsPanel({ category, showBatch, selectedModels = [] }) {
     });
   }
 
+  function handleRunWebSearch(prompt) {
+    navigate("/web-search-tests", {
+      state: {
+        promptPayload: { text: prompt.text, attachments: prompt.attachments },
+        promptTitle: prompt.title,
+      },
+    });
+  }
+
   async function handleDelete(id) {
     if (!window.confirm("Delete this prompt?")) return;
     await fetch(`${apiBase}/${id}`, { method: "DELETE" });
@@ -373,12 +382,16 @@ function PromptsPanel({ category, showBatch, selectedModels = [] }) {
               {prompts.map((p) => (
                 <tr key={p.id}>
                   <td>
-                    <Typography level="body-sm" fontWeight="lg">
+                    <Typography
+                      level="body-sm"
+                      fontWeight="lg"
+                      textColor="#D7DFE7"
+                    >
                       {p.title}
                     </Typography>
                   </td>
                   <td>
-                    <Typography level="body-sm" textColor="neutral.600">
+                    <Typography level="body-sm" textColor="#D7DFE7">
                       {truncate(p.text)}
                     </Typography>
                   </td>
@@ -388,9 +401,7 @@ function PromptsPanel({ category, showBatch, selectedModels = [] }) {
                         —
                       </Typography>
                     ) : (
-                      <Box
-                        sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
-                      >
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                         {p.attachments.slice(0, 2).map((a) => (
                           <Chip
                             key={a.name}
@@ -410,7 +421,7 @@ function PromptsPanel({ category, showBatch, selectedModels = [] }) {
                     )}
                   </td>
                   <td>
-                    <Typography level="body-xs" textColor="neutral.500">
+                    <Typography level="body-xs" textColor="#D7DFE7">
                       {formatDate(p.created_at)}
                     </Typography>
                   </td>
@@ -424,6 +435,16 @@ function PromptsPanel({ category, showBatch, selectedModels = [] }) {
                           onClick={() => handleRun(p)}
                         >
                           <PlayIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Run in Web Search Tests" placement="top">
+                        <IconButton
+                          size="sm"
+                          variant="plain"
+                          color="neutral"
+                          onClick={() => handleRunWebSearch(p)}
+                        >
+                          <GlobeIcon />
                         </IconButton>
                       </Tooltip>
                       {showBatch && (
@@ -498,7 +519,7 @@ function PromptsPage({ selectedModels }) {
     <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
       <Box sx={{ mb: 3 }}>
         <Typography level="h3">Prompts Manager</Typography>
-        <Typography level="body-sm" textColor="neutral.500">
+        <Typography level="body-sm" textColor="#D7DFE7">
           Save, organise, and reuse your analysis prompts.
         </Typography>
       </Box>
@@ -526,6 +547,25 @@ function PromptsPage({ selectedModels }) {
 }
 
 // ─── Inline SVG icons ─────────────────────────────────────────────────────────
+
+function GlobeIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
 
 function BatchIcon() {
   return (
@@ -644,6 +684,5 @@ function FileIcon() {
     </svg>
   );
 }
-
 
 export default PromptsPage;
