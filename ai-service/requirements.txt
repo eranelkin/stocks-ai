@@ -4,3 +4,4 @@ openai
 python-dotenv
 tavily-python
 anthropic>=0.25.0
+google-genai

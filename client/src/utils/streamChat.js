@@ -34,14 +34,16 @@ export async function streamChat({ model, messages, attachments = [], enableWebS
       if (!line.startsWith('data: ')) continue;
       const data = line.slice(6).trim();
       if (data === '[DONE]') continue;
+      let parsed;
       try {
-        const { content } = JSON.parse(data);
-        if (content) {
-          fullText += content;
-          onToken?.(content);
-        }
+        parsed = JSON.parse(data);
       } catch {
-        // malformed chunk — skip
+        continue; // malformed chunk — skip
+      }
+      if (parsed.error) throw new Error(parsed.error);
+      if (parsed.content) {
+        fullText += parsed.content;
+        onToken?.(parsed.content);
       }
     }
   }

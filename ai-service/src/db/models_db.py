@@ -63,8 +63,8 @@ def _infer_strategy(m: dict) -> str | None:
         return None
     if m.get("provider") == "anthropic":
         return "anthropic"
-    # All OpenAI-compatible providers (including Gemini's compat endpoint) use Tavily function calling.
-    # Gemini's native google_search tool only works on the native Gemini API, not the OpenAI compat layer.
+    if "generativelanguage.googleapis.com" in m.get("base_url", ""):
+        return "native_gemini"
     return "function_calling"
 
 

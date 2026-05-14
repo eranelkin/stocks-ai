@@ -226,23 +226,51 @@ async def _search_native_gemini(
     extra_headers: dict | None,
     extra_params: dict | None,
 ) -> AsyncGenerator[str, None]:
-    """Gemini's built-in Google Search grounding — single streaming call, no Tavily."""
-    from services.search import GEMINI_SEARCH_TOOL
+    """Gemini's built-in Google Search grounding via native google-genai SDK."""
+    from google import genai
+    from google.genai import types
 
-    client = AsyncOpenAI(
-        api_key=api_key,
-        base_url=base_url,
-        default_headers=extra_headers or {},
-    )
-    log.info("→ POST %s/chat/completions (native_gemini) model=%s", base_url.rstrip('/'), model_id)
-    stream = await client.chat.completions.create(
-        model=model_id,
-        messages=full_messages,
-        tools=[GEMINI_SEARCH_TOOL],
-        stream=True,
-        **(extra_params or {}),
-    )
-    return iterate_stream(stream)
+    client = genai.Client(api_key=api_key)
+    system_instruction, contents = _to_gemini_messages(full_messages)
+
+    log.info("→ Gemini generate_content_stream (native_gemini) model=%s", model_id)
+
+    async def _stream() -> AsyncGenerator[str, None]:
+        try:
+            async for chunk in await client.aio.models.generate_content_stream(
+                model=model_id,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction or None,
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            ):
+                if chunk.text:
+                    yield f"data: {json.dumps({'content': chunk.text})}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            log.error("Gemini stream error: %s", e)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return _stream()
+
+
+def _to_gemini_messages(messages: list[dict]) -> tuple[str, list]:
+    """Convert OpenAI-format messages to (system_instruction, gemini_contents)."""
+    from google.genai import types
+
+    system_instruction = ""
+    contents = []
+    for msg in messages:
+        role, content = msg["role"], msg["content"]
+        if role == "system":
+            system_instruction = content
+        elif role == "user":
+            contents.append(types.Content(role="user", parts=[types.Part(text=content)]))
+        elif role == "assistant":
+            contents.append(types.Content(role="model", parts=[types.Part(text=content)]))
+    return system_instruction, contents
 
 
 async def _search_anthropic(

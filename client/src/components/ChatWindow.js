@@ -376,21 +376,23 @@ function ChatWindow({ selectedModels }) {
           if (!line.startsWith("data: ")) continue;
           const data = line.slice(6).trim();
           if (data === "[DONE]") continue;
+          let parsed;
           try {
-            const { content } = JSON.parse(data);
-            if (content) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                updated[updated.length - 1] = {
-                  ...last,
-                  content: last.content + content,
-                };
-                return updated;
-              });
-            }
+            parsed = JSON.parse(data);
           } catch {
-            // malformed chunk — skip
+            continue; // malformed chunk — skip
+          }
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.content) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + parsed.content,
+              };
+              return updated;
+            });
           }
         }
       }
