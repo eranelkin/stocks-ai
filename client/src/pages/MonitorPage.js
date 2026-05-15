@@ -67,6 +67,15 @@ function fmtTs(ts) {
   }
 }
 
+function fmtDate(ts) {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleDateString();
+  } catch {
+    return ts;
+  }
+}
+
 export default function MonitorPage() {
   const [serverOk, setServerOk] = useState(null);
   const [aiOk, setAiOk] = useState(null);
@@ -74,8 +83,12 @@ export default function MonitorPage() {
   const [logs, setLogs] = useState([]);
   const [typeFilter, setTypeFilter] = useState('');
   const [modelFilter, setModelFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [clearing, setClearing] = useState(false);
+  const [sortCol, setSortCol] = useState('ts');
+  const [sortDir, setSortDir] = useState('desc');
+  const [modelColWidth, setModelColWidth] = useState(120);
   const timerRef = useRef(null);
 
   const checkHealth = useCallback(async () => {
@@ -135,6 +148,49 @@ export default function MonitorPage() {
 
   const uniqueModels = [...new Set(logs.map((l) => l.model_id).filter(Boolean))];
 
+  function startModelResize(e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = modelColWidth;
+    function onMouseMove(e) {
+      setModelColWidth(Math.max(60, startWidth + e.clientX - startX));
+    }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  function handleSort(col) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
+  }
+
+  const dateThreshold = dateFilter !== 'all'
+    ? Date.now() - { '1d': 1, '7d': 7, '30d': 30 }[dateFilter] * 864e5
+    : null;
+
+  const sortedLogs = [...logs]
+    .filter((l) => !dateThreshold || new Date(l.ts).getTime() >= dateThreshold)
+    .sort((a, b) => {
+    let av = a[sortCol];
+    let bv = b[sortCol];
+    if (typeof av === 'string' || sortCol === 'ts') {
+      av = av ?? '';
+      bv = bv ?? '';
+      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+    av = av ?? -1;
+    bv = bv ?? -1;
+    return sortDir === 'asc' ? av - bv : bv - av;
+  });
+
   return (
     <Box sx={{ p: 2.5, overflow: 'auto', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Health */}
@@ -184,6 +240,18 @@ export default function MonitorPage() {
           ))}
         </Select>
 
+        <Select
+          size="sm"
+          value={dateFilter}
+          onChange={(_, v) => setDateFilter(v ?? 'all')}
+          sx={{ minWidth: 130 }}
+        >
+          <Option value="all">All time</Option>
+          <Option value="1d">Last day</Option>
+          <Option value="7d">Last 7 days</Option>
+          <Option value="30d">Last month</Option>
+        </Select>
+
         <Box sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}>
           <Typography level="body-sm" textColor="text.secondary">Auto-refresh</Typography>
           <Switch size="sm" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
@@ -211,11 +279,27 @@ export default function MonitorPage() {
         <Table size="sm" stickyHeader hoverRow>
           <thead>
             <tr>
+              <th style={{ width: 80, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => handleSort('ts')}>
+                Date <SortIcon active={sortCol === 'ts'} dir={sortDir} />
+              </th>
               <th style={{ width: 80 }}>Time</th>
-              <th style={{ width: 90 }}>Type</th>
-              <th style={{ width: 120 }}>Model</th>
-              <th style={{ width: 70 }}>Status</th>
-              <th style={{ width: 80 }}>Duration</th>
+              <th style={{ width: 90, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => handleSort('type')}>
+                Type <SortIcon active={sortCol === 'type'} dir={sortDir} />
+              </th>
+              <th style={{ width: modelColWidth, minWidth: modelColWidth, maxWidth: modelColWidth, position: 'relative', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => handleSort('model_id')}>
+                Model <SortIcon active={sortCol === 'model_id'} dir={sortDir} />
+                <span
+                  onMouseDown={startModelResize}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 6, cursor: 'col-resize' }}
+                />
+              </th>
+              <th style={{ width: 70, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>
+                Status <SortIcon active={sortCol === 'status'} dir={sortDir} />
+              </th>
+              <th style={{ width: 80, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => handleSort('duration_ms')}>
+                Duration <SortIcon active={sortCol === 'duration_ms'} dir={sortDir} />
+              </th>
               <th>Search query</th>
               <th>Error</th>
             </tr>
@@ -223,16 +307,19 @@ export default function MonitorPage() {
           <tbody>
             {logs.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--joy-palette-text-tertiary)' }}>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: 'var(--joy-palette-text-tertiary)' }}>
                   No logs yet
                 </td>
               </tr>
             )}
-            {logs.map((row) => (
+            {sortedLogs.map((row) => (
               <tr
                 key={row.id}
                 style={row.status === 'error' ? { background: 'var(--joy-palette-danger-softBg)' } : undefined}
               >
+                <td>
+                  <Typography level="body-xs" noWrap>{fmtDate(row.ts)}</Typography>
+                </td>
                 <td>
                   <Typography level="body-xs" noWrap>{fmtTs(row.ts)}</Typography>
                 </td>
@@ -274,6 +361,14 @@ export default function MonitorPage() {
         </Table>
       </Sheet>
     </Box>
+  );
+}
+
+function SortIcon({ active, dir }) {
+  return (
+    <span style={{ marginLeft: 2, opacity: active ? 1 : 0.3, fontSize: 10 }}>
+      {!active || dir === 'asc' ? '▲' : '▼'}
+    </span>
   );
 }
 

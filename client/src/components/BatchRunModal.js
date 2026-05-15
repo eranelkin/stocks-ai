@@ -26,6 +26,7 @@ import { injectCurrentDate } from "../utils/injectCurrentDate";
 function extractList(jsonContent) {
   const parsed = JSON.parse(jsonContent);
   if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed.list)) return parsed.list;
   for (const val of Object.values(parsed)) {
     if (Array.isArray(val)) return val;
   }

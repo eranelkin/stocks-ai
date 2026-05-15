@@ -6,22 +6,6 @@ log = logging.getLogger(__name__)
 
 _DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "ai-service.db"
 
-_CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    type         TEXT NOT NULL,
-    model_id     TEXT,
-    status       TEXT NOT NULL,
-    duration_ms  INTEGER,
-    search_query TEXT,
-    error_msg    TEXT
-)
-"""
-
-_CREATE_IDX_TS   = "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)"
-_CREATE_IDX_TYPE = "CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_logs(type)"
-
 
 def _conn() -> sqlite3.Connection:
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -32,11 +16,9 @@ def _conn() -> sqlite3.Connection:
 
 
 def init_logs_db() -> None:
+    from db.migrate import run_migrations
     with _conn() as conn:
-        conn.execute(_CREATE_TABLE)
-        conn.execute(_CREATE_IDX_TS)
-        conn.execute(_CREATE_IDX_TYPE)
-        conn.commit()
+        run_migrations(conn)
 
 
 def insert_log(

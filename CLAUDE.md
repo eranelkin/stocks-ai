@@ -74,3 +74,16 @@ Request routing:
 - Client `proxy` in package.json → all `/api/*` go to server (port 5006)
 - Server proxies `/api/ai/*` → ai-service (port 5007) via http-proxy-middleware
 - Server handles `/api/health` (and future routes) directly
+
+## Database Migrations
+
+Both SQLite databases use a versioned file-based migration system. See `migrations.md` for
+full instructions. Key rules:
+
+- **Never** add inline schema code (try/catch ALTER TABLE) to startup files
+- **Always** create a new `NNN_description.sql` file in the correct folder:
+  - `prompts` / `reports` changes → `server/migrations/`
+  - `models` / `audit_logs` changes → `ai-service/migrations/`
+- Migrations run automatically on startup — no manual step needed
+- Migrations must be **additive only** (ADD columns/tables, never DROP or RENAME)
+- New `NOT NULL` columns must include a `DEFAULT` value

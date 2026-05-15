@@ -6,6 +6,8 @@ import ChipDelete from "@mui/joy/ChipDelete";
 import CircularProgress from "@mui/joy/CircularProgress";
 import IconButton from "@mui/joy/IconButton";
 import LinearProgress from "@mui/joy/LinearProgress";
+import Option from "@mui/joy/Option";
+import Select from "@mui/joy/Select";
 import Sheet from "@mui/joy/Sheet";
 import Textarea from "@mui/joy/Textarea";
 import Tooltip from "@mui/joy/Tooltip";
@@ -103,6 +105,8 @@ export default function WebSearchTestsPage({ selectedModels }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [prompts, setPrompts] = useState([]);
+  const [selectedPromptId, setSelectedPromptId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState([]);
@@ -139,6 +143,23 @@ export default function WebSearchTestsPage({ selectedModels }) {
     }
     navigate("/web-search-tests", { replace: true, state: null });
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetch("/api/prompts?category=personal")
+      .then((r) => r.json())
+      .then(setPrompts)
+      .catch(() => {});
+  }, []);
+
+  function handlePromptSelect(_, promptId) {
+    if (!promptId) return;
+    const prompt = prompts.find((p) => p.id === promptId);
+    if (!prompt) return;
+    setSelectedPromptId(promptId);
+    setInput(injectCurrentDate(prompt.text));
+    setAttachments(prompt.attachments ?? []);
+    setFileError("");
+  }
 
   function handleFileChange(e) {
     setFileError("");
@@ -444,6 +465,38 @@ export default function WebSearchTestsPage({ selectedModels }) {
         overflow: "hidden",
       }}
     >
+      {/* Prompt preset selector */}
+      <Box
+        sx={{
+          px: 2,
+          py: 1,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.surface",
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+        }}
+      >
+        <Typography level="body-xs" textColor="text.secondary" sx={{ flexShrink: 0 }}>
+          Preset
+        </Typography>
+        <Select
+          size="sm"
+          placeholder="Select a prompt…"
+          value={selectedPromptId}
+          onChange={handlePromptSelect}
+          disabled={loading || batchRunning}
+          sx={{ flex: 1, maxWidth: 420 }}
+        >
+          {prompts.map((p) => (
+            <Option key={p.id} value={p.id}>
+              {p.title}
+            </Option>
+          ))}
+        </Select>
+      </Box>
+
       {/* Inline batch progress strip */}
       {(batchRunning || batchError) && (
         <Box

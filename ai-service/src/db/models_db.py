@@ -13,23 +13,6 @@ from pathlib import Path
 
 _DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "ai-service.db"
 
-_CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS models (
-    id                   TEXT PRIMARY KEY,
-    name                 TEXT NOT NULL,
-    provider             TEXT NOT NULL DEFAULT 'openai_compatible',
-    base_url             TEXT NOT NULL DEFAULT '',
-    api_key              TEXT NOT NULL DEFAULT '',
-    is_default           INTEGER NOT NULL DEFAULT 0,
-    is_active            INTEGER NOT NULL DEFAULT 1,
-    created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-    web_search           INTEGER,
-    web_search_strategy  TEXT,
-    extra_headers        TEXT,
-    extra_params         TEXT
-)
-"""
-
 
 def get_connection() -> sqlite3.Connection:
     """Opens a fresh WAL-mode connection. Call per operation — not thread-safe to share."""
@@ -38,23 +21,6 @@ def get_connection() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
-
-
-def _migrate_db(conn: sqlite3.Connection) -> None:
-    """Add new columns to existing installs. Idempotent — safe to run on every startup."""
-    migrations = [
-        "ALTER TABLE models ADD COLUMN web_search INTEGER",
-        "ALTER TABLE models ADD COLUMN web_search_strategy TEXT",
-        "ALTER TABLE models ADD COLUMN extra_headers TEXT",
-        "ALTER TABLE models ADD COLUMN extra_params TEXT",
-        "ALTER TABLE models ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
-    ]
-    for sql in migrations:
-        try:
-            conn.execute(sql)
-        except sqlite3.OperationalError:
-            pass  # column already exists
-    conn.commit()
 
 
 def _infer_strategy(m: dict) -> str | None:
@@ -69,11 +35,10 @@ def _infer_strategy(m: dict) -> str | None:
 
 
 def init_db() -> None:
-    """Creates the table and seeds from config if empty. Idempotent — safe on every restart."""
+    """Runs migrations then seeds from config if empty. Idempotent — safe on every restart."""
+    from db.migrate import run_migrations
     with get_connection() as conn:
-        conn.execute(_CREATE_TABLE)
-        _migrate_db(conn)
-        conn.commit()
+        run_migrations(conn)
         row = conn.execute("SELECT COUNT(*) FROM models").fetchone()
         if row[0] == 0:
             _seed_from_config(conn)
